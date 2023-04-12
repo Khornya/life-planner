@@ -1,0 +1,42 @@
+Name;Duration;Urgency;Importance;Priority
+Nettoyer les toilettes du bas;2;3;3;15
+Nettoyer les toilettes du haut;2;3;3;15
+Passer la serpillère dans les toilettes du bas;2;3;3;15
+Nettoyer la douche;4;3;3;15
+Plier le linge;6;3;2;13
+Nettoyer le plan de travail;2;2;3;12
+Faire la vaisselle;4;2;3;12
+Nettoyer le miroir de la salle de bain;1;2;2;10
+Passer le balai dans la salle de bain;2;2;2;10
+Passer la serpillère dans la salle de bain;2;2;2;10
+Ranger la cuisine;3;2;2;10
+Nettoyer la table basse du salon;1;1;3;9
+Nettoyer la table de la salle à manger;1;1;3;9
+Faire la lessive;2;1;3;9
+Passer la serpillère dans les toilettes du haut;2;1;3;9
+Faire les poussières sur le bureau;2;2;1;8
+Faire les poussières dans la chambre de William;2;2;1;8
+Passer l'aspirateur dans la chambre de William;2;2;1;8
+Ranger le bureau;3;2;1;8
+Faire les poussières dans la salle à manger;3;2;1;8
+Nettoyer les portes de placard;3;2;1;8
+Ranger l'entrée;3;2;1;8
+Faire les poussières dans l'entrée;3;2;1;8
+Ranger l'arrière-cuisine;3;2;1;8
+Faire les poussières dans la chambre;3;2;1;8
+Ranger la chambre de William;3;2;1;8
+Faire les poussières dans le salon;4;2;1;8
+Ranger la chambre;4;2;1;8
+Passer l'aspirateur dans la chambre;4;2;1;8
+Nettoyer le lavabo des toilettes du bas;1;1;2;7
+Changer les draps de William;2;1;2;7
+Nettoyer le lavabo de la salle de bain;2;1;2;7
+Changer les draps;4;1;2;7
+Passer l'aspirateur dans la pièce de vie;6;1;2;7
+Passer la serpillère dans la pièce de vie;6;1;2;7
+Ranger la salle de bain;2;1;1;5
+Ranger la salle à manger;3;1;1;5
+Nettoyer la baignoire;3;1;1;5
+Ranger le salon;6;1;1;5
+Repasser le linge;6;1;1;5
+Nettoyer les vitres dans la pièce de vie;12;1;1;5
