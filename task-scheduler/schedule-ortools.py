@@ -1,21 +1,17 @@
-"""Minimal jobshop example."""
 import collections
 from ortools.sat.python import cp_model
 import pandas as pd
 
 
 def main():
-    """Minimal jobshop problem."""
     # Data.
-
     tasks = pd.read_csv("data/tasks.csv", sep=';')
-    schedule = pd.read_csv("data/schedule.csv", sep=';')
+    unavailabilities = pd.read_csv("data/unavailabilities.csv", sep=';', dtype={'Start': 'Int32', 'End': 'Int32'})
 
     priorities = list(tasks["Priority"])
     durations = list(tasks["Duration"])
-    availabilities = list(schedule["Availability"])
 
-    horizon = max(schedule["Id"])
+    horizon = 50 #TODO get from parameter
 
     # Create the model.
     model = cp_model.CpModel()
@@ -23,8 +19,8 @@ def main():
     # Named tuple to store information about created variables.
     task_type = collections.namedtuple('task_type', 'start end is_present interval')
     # Named tuple to manipulate solution information.
-    assigned_task_type = collections.namedtuple('assigned_task_type',
-                                                'start task duration is_present')
+    assigned_task_type = collections.namedtuple('assigned_task_type', 'start task duration is_present')
+
     all_tasks = {}
 
     for task_id, duration in enumerate(list(durations)):
@@ -34,9 +30,12 @@ def main():
         is_present_var = model.NewBoolVar('is_present' + suffix)
         interval_var = model.NewOptionalIntervalVar(start_var, duration, end_var, is_present_var, 'interval' + suffix)
         all_tasks[task_id] = task_type(start=start_var, end=end_var, is_present=is_present_var, interval=interval_var)
-        #TODO : add availability constraint
     
-    model.AddNoOverlap([all_tasks[task].interval for task in all_tasks])
+    unavailable_intervals = []
+    for index, row in unavailabilities.iterrows():
+        unavailable_intervals.append(model.NewIntervalVar((row["Start"]), row["End"] - row["Start"], row["End"], f'unavailable_interval_{index}'))
+    
+    model.AddNoOverlap([all_tasks[task].interval for task in all_tasks] + unavailable_intervals)
 
     # Priority objective.
     obj_var = model.NewIntVar(0, sum(priorities), name='total_priority')
