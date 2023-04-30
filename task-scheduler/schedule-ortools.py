@@ -10,8 +10,7 @@ def invert_bit(bit):
 def main():
     # Data.
     tasks = pd.read_csv("data/tasks.csv", sep=';', dtype={'DueDate': 'Int32', 'MaxDueDate': 'Int32'})
-    unavailabilities = pd.read_csv("data/unavailabilities.csv", sep=';', dtype={'Start': 'Int32', 'End': 'Int32'})
-    reserved_tags = pd.read_csv("data/tags.csv", sep=';', dtype={'Start': 'Int32', 'End': 'Int32'})#.groupby('Tag')[['Start','End']].apply(lambda x: x.values.tolist())
+    reserved_tags = pd.read_csv("data/tags.csv", sep=';', dtype={'Start': 'Int32', 'End': 'Int32'})
 
     impacts = list(tasks["Impact"].fillna(0))
     durations = list(tasks["Duration"])
@@ -67,11 +66,7 @@ def main():
         model.AddNoOverlap(incompatible_intervals + [interval_var])
         all_tasks[task_id] = task_type(start=start_var, end=end_var, is_present=is_present_var, interval=interval_var, raw_priority=raw_priority, priority=priority_var, delay=delay_var, is_late=is_late_var)
     
-    unavailable_intervals = []
-    for index, row in unavailabilities.iterrows():
-        unavailable_intervals.append(model.NewIntervalVar((row["Start"]), row["End"] - row["Start"], row["End"], f'unavailable_interval_{index}'))
-    
-    model.AddNoOverlap([all_tasks[task].interval for task in all_tasks] + unavailable_intervals)
+    model.AddNoOverlap([all_tasks[task].interval for task in all_tasks])
 
     # Priority objective.
     obj_var = model.NewIntVar(0, sum([all_tasks[task_id].raw_priority * 11 * 100 for task_id in all_tasks]), name='total_priority')
