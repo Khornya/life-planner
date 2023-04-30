@@ -17,7 +17,7 @@ def main():
     maxDueDates = list(tasks['MaxDueDate'])
 
     horizon = max(tasks['MaxDueDate'].max(), 1000)
-    max_raw_priority = max([impact*100/durations[task_id] for impact, task_id in enumerate(impacts)])
+    max_raw_priority = math.floor(max([impact*100/durations[task_id] for impact, task_id in enumerate(impacts)]))
 
     # Create the model.
     model = cp_model.CpModel()
@@ -43,11 +43,18 @@ def main():
                 model.AddDivisionEquality(delay_var, (dueDates[task_id] - end_var)*100, maxDueDates[task_id] - dueDates[task_id])
                 model.Add(delay_var < 0).OnlyEnforceIf(is_late_var)
                 model.Add(delay_var >= 0).OnlyEnforceIf(is_late_var.Not())
+                delay_var_abs = model.NewIntVar(0,100, 'delay_abs' + suffix)
+                model.AddAbsEquality(delay_var_abs, delay_var)
+                opt_delay_var = model.NewIntVar(0,100, 'opt_delay' + suffix)
+                model.AddMultiplicationEquality(opt_delay_var, [is_present_var, delay_var_abs])
         else:
             delay_var = model.NewConstant(0)
+            opt_delay_var = model.NewBoolVar('opt_delay' + suffix)
+            model.Add(opt_delay_var == is_present_var)
+
         raw_priority = math.floor(impacts[task_id]*100/duration)
-        priority_var = model.NewIntVar(-2200000 * 11 * 100, 2200000 * 11 * 100, 'priority' + suffix) # priority should not be 0 if delay = 0
-        model.AddMultiplicationEquality(priority_var, [raw_priority * delay_var, 10 + is_late_var.Not() - 2 * is_late_var]) # TODO: add is_present_var
+        priority_var = model.NewIntVar(0, max_raw_priority * 11 * 100, 'priority' + suffix)
+        model.AddMultiplicationEquality(priority_var, [raw_priority * opt_delay_var, 10 + is_late_var.Not() - 2 * is_late_var])
         all_tasks[task_id] = task_type(start=start_var, end=end_var, is_present=is_present_var, interval=interval_var, raw_priority=raw_priority, priority=priority_var, delay=delay_var, is_late=is_late_var)
     
     unavailable_intervals = []
@@ -57,11 +64,9 @@ def main():
     model.AddNoOverlap([all_tasks[task].interval for task in all_tasks] + unavailable_intervals)
 
     # Priority objective.
-    obj_var = model.NewIntVar(-math.floor(sum([all_tasks[task_id].raw_priority * 11 * 100 for task_id in all_tasks])), math.floor(sum([all_tasks[task_id].raw_priority * 11 * 100 for task_id in all_tasks])) + 1, name='total_priority')
+    obj_var = model.NewIntVar(0, sum([all_tasks[task_id].raw_priority * 11 * 100 for task_id in all_tasks]), name='total_priority')
     model.Add(obj_var == sum([all_tasks[task_id].priority for task_id in all_tasks]))
     model.Maximize(obj_var)
-
-    model.ExportToFile("model-mult.txt")
 
     # Creates the solver and solve.
     solver = cp_model.CpSolver()
