@@ -3,6 +3,8 @@ declare global {
     interface ProcessEnv {
       NODE_ENV: 'development' | 'production'
       NEXT_PUBLIC_HOST_BASE_URL: string
+      GOOGLE_ID: string
+      GOOGLE_SECRET: string
     }
   }
 }
