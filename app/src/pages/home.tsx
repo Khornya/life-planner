@@ -1,11 +1,17 @@
 import type { calendar_v3 } from 'googleapis'
 import { google } from 'googleapis'
 import type { GetServerSidePropsContext } from 'next/types'
-import { getSession } from 'next-auth/react'
+import type { Session } from 'next-auth/core/types'
+import { getSession, signOut } from 'next-auth/react'
 
-const Home: React.FC<{ events: calendar_v3.Schema$Event[] | undefined }> = ({ events }) => {
+const Home: React.FC<{ events: calendar_v3.Schema$Event[] | undefined; session: Session }> = ({ events, session }) => {
   return (
     <div>
+      <div>
+        <h2>hi {session.user?.name}</h2>
+        <img src={session.user?.image || ''} alt={`${session.user?.name} photo`} />
+        <button onClick={signOut}>sign out</button>
+      </div>
       <h1>My events</h1>
       {events?.map(event => (
         <div key={event.id}>
@@ -20,10 +26,13 @@ export const getServerSideProps = async (context: GetServerSidePropsContext) => 
   const { req } = context
   const session = await getSession({ req })
 
-  console.log('session', session)
-
   if (!session) {
-    // redirect 401
+    return {
+      redirect: {
+        permanent: false,
+        destination: '/',
+      },
+    }
   }
 
   const clientId = process.env.GOOGLE_ID
@@ -54,11 +63,10 @@ export const getServerSideProps = async (context: GetServerSidePropsContext) => 
     orderBy: 'startTime',
   })
 
-  console.log('result', result)
-
   return {
     props: {
       events: result.data.items,
+      session,
     },
   }
 }
