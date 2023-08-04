@@ -23,8 +23,9 @@ const Home: React.FC<{ events: calendar_v3.Schema$Event[] | undefined; session: 
 }
 
 export const getServerSideProps = async (context: GetServerSidePropsContext) => {
-  const { req } = context
-  const session = await getSession({ req })
+  const { req, res } = context
+  const session = await getServerSession(req, res, authOptions)
+
 
   if (!session) {
     return {

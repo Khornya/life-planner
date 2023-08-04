@@ -11,6 +11,10 @@ export const authOptions: AuthOptions = {
       authorization: {
         params: {
           scope: 'openid email profile https://www.googleapis.com/auth/calendar.events',
+          // following options required is refresh token not stored in DB
+          prompt: 'consent',
+          access_type: 'offline',
+          response_type: 'code',
         },
       },
     }),
@@ -26,7 +30,7 @@ export const authOptions: AuthOptions = {
     async session({ session, token }) {
       session.user = token
       ;(session as any).accessToken = token.accessToken
-      ;(session as any).refresh_token = token.refreshToken
+      ;(session as any).refreshToken = token.refreshToken
       return session
     },
   },
