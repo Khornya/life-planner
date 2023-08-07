@@ -1,0 +1,17 @@
+@layer components {
+  #__next {
+      height: 100%;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      font-family: -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Oxygen,Ubuntu,Cantarell,"Fira Sans","Droid Sans","Helvetica Neue",sans-serif;
+  }
+  html,
+  body {
+      height: 100vh;
+      margin: 0px;
+  }
+  .icon {
+    width: 15px;
+  }
+}
