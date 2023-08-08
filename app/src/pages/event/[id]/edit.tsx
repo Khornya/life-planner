@@ -7,22 +7,40 @@ import { getServerSession } from 'next-auth/next'
 import { authOptions } from '@/pages/api/auth/[...nextauth]'
 import { editEvent } from '@/lib/client/event'
 import { getGoogleCalendar } from '@/lib/client/google/calendar'
-import { Box, Button, Checkbox, Container, FormControlLabel, Switch, TextField, Typography } from '@mui/material'
+import { Box, Button, Checkbox, Container, FormControlLabel, InputAdornment, Switch, TextField, Typography } from '@mui/material'
 import { DateTimePicker, renderTimeViewClock } from '@mui/x-date-pickers'
 import dayjs from 'dayjs'
 
-const EventEdit: React.FC<{ event: calendar_v3.Schema$Event; session: Session }> = ({ event, session }) => {
-  const [modifiedEvent, setModifiedEvent] = useState(event)
-
-  const setPrivateProperty: (property: string, value: string) => void = (property, value) => {
-    const eventCopy = { ...modifiedEvent }
-    if (!eventCopy.extendedProperties?.private) eventCopy.extendedProperties = { private: {} }
-    ;(eventCopy.extendedProperties.private as any)[property] = value
-    setModifiedEvent(eventCopy)
+interface ExtendedProperties {
+  shared: {}
+  private: {
+    isFlexible: boolean
+    duration?: number
+    impact?: number
+    dueDate?: Date
+    maxDueDate?: Date
   }
+}
+
+const EventEdit: React.FC<{ event: calendar_v3.Schema$Event; extendedProperties: ExtendedProperties; session: Session }> = ({
+  event,
+  extendedProperties,
+  session,
+}) => {
+  const [modifiedEvent, setModifiedEvent] = useState(event)
+  const [modifiedExtendedProperties, setModifiedExtendedProperties] = useState(extendedProperties)
 
   const save: () => Promise<void> = async () => {
-    await editEvent(modifiedEvent)
+    const stringifiedPrivateProperties = Object.fromEntries(
+      Object.entries(modifiedExtendedProperties.private || {}).map(([key, value]) => [key, JSON.stringify(value)])
+    )
+    const stringifiedSharedProperties = Object.fromEntries(
+      Object.entries(modifiedExtendedProperties.shared || {}).map(([key, value]) => [key, JSON.stringify(value)])
+    )
+    await editEvent({
+      ...modifiedEvent,
+      extendedProperties: { private: stringifiedPrivateProperties, shared: stringifiedSharedProperties },
+    })
   }
 
   return (
@@ -72,28 +90,103 @@ const EventEdit: React.FC<{ event: calendar_v3.Schema$Event; session: Session }>
           <FormControlLabel
             control={
               <Switch
-                checked={JSON.parse(modifiedEvent.extendedProperties?.private?.isFlexible || 'false')}
+                checked={modifiedExtendedProperties.private.isFlexible}
                 onChange={e =>
-                  setPrivateProperty(
-                    'isFlexible',
-                    JSON.stringify(!JSON.parse(modifiedEvent.extendedProperties?.private?.isFlexible || 'false'))
-                  )
+                  setModifiedExtendedProperties({
+                    ...modifiedExtendedProperties,
+                    private: {
+                      ...modifiedExtendedProperties.private,
+                      isFlexible: e.target.checked,
+                    },
+                  })
                 }
               />
             }
             label="Flexible"
           />
-          {JSON.parse(modifiedEvent.extendedProperties?.private?.isFlexible || 'false') ? (
+          {modifiedExtendedProperties.private.isFlexible ? (
             <>
               <TextField
                 type="number"
                 label="Duration"
-                value={modifiedEvent.extendedProperties?.private?.duration || 0}
-                onChange={e => setPrivateProperty('duration', e.target.value)}
+                inputProps={{
+                  min: 0,
+                  step: 5,
+                }}
+                InputProps={{
+                  endAdornment: <InputAdornment position="end">min</InputAdornment>,
+                }}
+                value={(modifiedExtendedProperties.private.duration || 0) * 5}
+                onChange={e =>
+                  setModifiedExtendedProperties({
+                    ...modifiedExtendedProperties,
+                    private: {
+                      ...modifiedExtendedProperties.private,
+                      duration: parseInt(e.target.value) / 5,
+                    },
+                  })
+                }
+              />
+              <TextField
+                type="number"
+                label="Impact"
+                inputProps={{
+                  min: 0,
+                }}
+                value={modifiedExtendedProperties.private.impact}
+                onChange={e =>
+                  setModifiedExtendedProperties({
+                    ...modifiedExtendedProperties,
+                    private: {
+                      ...modifiedExtendedProperties.private,
+                      impact: parseInt(e.target.value),
+                    },
+                  })
+                }
+              />
+              <DateTimePicker
+                label="Due date"
+                viewRenderers={{
+                  hours: renderTimeViewClock,
+                  minutes: renderTimeViewClock,
+                  seconds: renderTimeViewClock,
+                }}
+                value={dayjs(modifiedExtendedProperties.private.dueDate || '')}
+                onChange={datetime =>
+                  setModifiedExtendedProperties({
+                    ...modifiedExtendedProperties,
+                    private: {
+                      ...modifiedExtendedProperties.private,
+                      dueDate: datetime?.toDate(),
+                    },
+                  })
+                }
+              />
+              <DateTimePicker
+                label="Max due date"
+                viewRenderers={{
+                  hours: renderTimeViewClock,
+                  minutes: renderTimeViewClock,
+                  seconds: renderTimeViewClock,
+                }}
+                value={dayjs(modifiedExtendedProperties.private.maxDueDate || '')}
+                onChange={datetime =>
+                  setModifiedExtendedProperties({
+                    ...modifiedExtendedProperties,
+                    private: {
+                      ...modifiedExtendedProperties.private,
+                      maxDueDate: datetime?.toDate(),
+                    },
+                  })
+                }
               />
             </>
           ) : null}
-          <Button variant="contained" disabled={event === modifiedEvent} onClick={() => save()}>
+          <Button
+            variant="contained"
+            disabled={event === modifiedEvent && extendedProperties === modifiedExtendedProperties}
+            onClick={() => save()}
+          >
             Save
           </Button>
         </Box>
@@ -118,14 +211,22 @@ export const getServerSideProps = async (context: GetServerSidePropsContext) => 
   }
 
   const calendar = getGoogleCalendar(session)
-
   const result = await calendar.events.get({ calendarId: 'primary', eventId: id as string })
-
-  console.log('event', result.data)
+  const event = result.data
+  const privateExtendedProperties = Object.fromEntries(
+    Object.entries(event.extendedProperties?.private || {}).map(([key, value]) => [key, JSON.parse(value)])
+  )
+  const sharedExtendedProperties = Object.fromEntries(
+    Object.entries(event.extendedProperties?.shared || {}).map(([key, value]) => [key, JSON.parse(value)])
+  )
 
   return {
     props: {
-      event: result.data,
+      event,
+      extendedProperties: {
+        private: privateExtendedProperties,
+        shared: sharedExtendedProperties,
+      },
       session,
     },
   }
