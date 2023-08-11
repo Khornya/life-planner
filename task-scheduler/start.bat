@@ -1,0 +1,1 @@
+flask --app ./index.py --debug run -h 0.0.0.0 -p 4000

@@ -1,3 +1,4 @@
 task-scheduler/Lib/
 task-scheduler/Scripts/
 task-scheduler/share/
+task-scheduler/__pycache__/

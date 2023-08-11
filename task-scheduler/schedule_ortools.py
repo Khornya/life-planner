@@ -2,39 +2,39 @@ import collections
 from ortools.sat.python import cp_model
 import pandas as pd
 import math
-from ast import literal_eval
 
 def invert_bit(bit):
     return 1 - bit
 
-def main():
-    # Data.
-    tasks = pd.read_csv("data/tasks.csv", sep=';', dtype={'DueDate': 'Int32', 'MaxDueDate': 'Int32'})
-    reserved_tags = pd.read_csv("data/tags.csv", sep=';', dtype={'Start': 'Int32', 'End': 'Int32'})
+task_type = collections.namedtuple('task_type', 'id start end is_present interval raw_priority priority delay is_late')
+assigned_task_type = collections.namedtuple('assigned_task_type', 'start task duration priority is_present delay is_late')
+reserved_tag_interval = collections.namedtuple('reserved_tag_interval', 'interval tags')
 
-    impacts = list(tasks["Impact"].fillna(0))
-    durations = list(tasks["Duration"])
-    dueDates = list(tasks['DueDate'])
-    maxDueDates = list(tasks['MaxDueDate'])
-    tags = list(tasks['Tags'].apply(literal_eval))
+def schedule(tasks, reserved_tags):
+    if not len(tasks):
+        return {
+            "found": True,
+            "tasks": []
+        }
+    tasks['maxDueDate'] = tasks['maxDueDate'].astype('Int32')
+    tasks['dueDate'] = tasks['dueDate'].astype('Int32')
+    durations = list(tasks["duration"])
+    impacts = list(tasks["impact"].fillna(0))
+    dueDates = list(tasks['dueDate'])
+    maxDueDates = list(tasks['maxDueDate'])
+    tags = list(tasks['tags'])
 
-    horizon = max(tasks['MaxDueDate'].max(), 1000)
-    max_raw_priority = math.floor(max([impact*100/durations[task_id] for impact, task_id in enumerate(impacts)]))
+    horizon = max(tasks['maxDueDate'].max(), 1000)
+    max_raw_priority = math.floor(max([impact*100/durations[task_id] for task_id, impact in enumerate(impacts)]))
 
     # Create the model.
     model = cp_model.CpModel()
-
-    # Named tuple to store information about created variables.
-    task_type = collections.namedtuple('task_type', 'start end is_present interval raw_priority priority delay is_late')
-    # Named tuple to manipulate solution information.
-    assigned_task_type = collections.namedtuple('assigned_task_type', 'start task duration priority is_present delay is_late')
-    reserved_tag_interval = collections.namedtuple('reserved_tag_interval', 'interval tags')
 
     all_tasks = {}
 
     reserved_tag_intervals = []
     for index, row in reserved_tags.iterrows():
-        reserved_tag_intervals.append(reserved_tag_interval(tags= literal_eval(row['Tags']), interval=model.NewIntervalVar(row['Start'], row['End'] - row['Start'], row['End'], f'reserved_interval_{index}')))
+        reserved_tag_intervals.append(reserved_tag_interval(tags= row['tags'], interval=model.NewIntervalVar(row['start'], row['end'] - row['start'], row['end'], f'reserved_interval_{index}')))
 
     for task_id, duration in enumerate(list(durations)):
         suffix = '_%i' % (task_id)
@@ -64,7 +64,7 @@ def main():
             if not(len([value for value in reserved_interval.tags if value in tags[task_id]])):
                 incompatible_intervals.append(reserved_interval.interval)
         model.AddNoOverlap(incompatible_intervals + [interval_var])
-        all_tasks[task_id] = task_type(start=start_var, end=end_var, is_present=is_present_var, interval=interval_var, raw_priority=raw_priority, priority=priority_var, delay=delay_var, is_late=is_late_var)
+        all_tasks[task_id] = task_type(id=tasks.iloc[task_id]['id'], start=start_var, end=end_var, is_present=is_present_var, interval=interval_var, raw_priority=raw_priority, priority=priority_var, delay=delay_var, is_late=is_late_var)
     
     model.AddNoOverlap([all_tasks[task].interval for task in all_tasks])
 
@@ -80,16 +80,36 @@ def main():
     if status == cp_model.OPTIMAL or status == cp_model.FEASIBLE:
         print(f'Optimal Priority: {solver.ObjectiveValue()}')
         for task_id, duration in enumerate(list(durations)):
-            print(assigned_task_type(start=solver.Value(all_tasks[task_id].start), task=task_id, duration=duration, priority=solver.Value(all_tasks[task_id].priority), is_present=solver.Value(all_tasks[task_id].is_present), delay=solver.Value(all_tasks[task_id].delay), is_late=solver.Value(all_tasks[task_id].is_late)))
+            print(assigned_task_type(
+                start=solver.Value(all_tasks[task_id].start),
+                task=task_id,
+                duration=duration,
+                priority=solver.Value(all_tasks[task_id].priority),
+                is_present=solver.Value(all_tasks[task_id].is_present),
+                delay=solver.Value(all_tasks[task_id].delay),
+                is_late=solver.Value(all_tasks[task_id].is_late)
+            ))
+        return {
+            "found": True,
+            "tasks": [{
+                "id": all_tasks[task_id].id,
+                "start": solver.Value(all_tasks[task_id].start),
+                "isPresent": bool(solver.Value(all_tasks[task_id].is_present)),
+                "isLate": bool(solver.Value(all_tasks[task_id].is_late)),
+                "duration": duration,
+                "priority": solver.Value(all_tasks[task_id].priority),
+                "delay": solver.Value(all_tasks[task_id].delay)
+            } for task_id, duration in enumerate(list(durations))]
+        }
     else:
-        print('No solution found.')
-
-    # Statistics.
-    print('\nStatistics')
-    print('  - conflicts: %i' % solver.NumConflicts())
-    print('  - branches : %i' % solver.NumBranches())
-    print('  - wall time: %f s' % solver.WallTime())
+        print('No solution found')
+        return {
+            "found": False,
+            "tasks": []
+        }
 
 
 if __name__ == '__main__':
-    main()
+    tasks = pd.read_csv("data/tasks.csv", sep=';', dtype={'DueDate': 'Int32', 'MaxDueDate': 'Int32'})
+    reserved_tags = pd.read_csv("data/tags.csv", sep=';', dtype={'Start': 'Int32', 'End': 'Int32'})
+    schedule(tasks, reserved_tags)
