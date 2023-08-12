@@ -6,22 +6,11 @@ import { useState } from 'react'
 import { getServerSession } from 'next-auth/next'
 import { authOptions } from '@/pages/api/auth/[...nextauth]'
 import { editEvent } from '@/lib/client/event'
-import { getGoogleCalendar } from '@/lib/client/google/calendar'
+import { ExtendedProperties, getGoogleCalendar, parseExtendedProperties } from '@/lib/server/api/google/calendar'
 import { Box, Button, Container, FormControlLabel, InputAdornment, Switch, TextField, Typography } from '@mui/material'
 import Grid from '@mui/material/Unstable_Grid2'
 import { DateTimePicker, renderTimeViewClock } from '@mui/x-date-pickers'
 import dayjs from 'dayjs'
-
-interface ExtendedProperties {
-  shared: {}
-  private: {
-    isFlexible: boolean
-    duration?: number
-    impact?: number
-    dueDate?: Date
-    maxDueDate?: Date
-  }
-}
 
 const EventEdit: React.FC<{ event: calendar_v3.Schema$Event; extendedProperties: ExtendedProperties; session: Session }> = ({
   event,
@@ -182,7 +171,7 @@ const EventEdit: React.FC<{ event: calendar_v3.Schema$Event; extendedProperties:
                         ...modifiedExtendedProperties,
                         private: {
                           ...modifiedExtendedProperties.private,
-                          dueDate: datetime?.toDate(),
+                          dueDate: datetime?.toDate().valueOf(),
                         },
                       })
                     }
@@ -203,7 +192,7 @@ const EventEdit: React.FC<{ event: calendar_v3.Schema$Event; extendedProperties:
                         ...modifiedExtendedProperties,
                         private: {
                           ...modifiedExtendedProperties.private,
-                          maxDueDate: datetime?.toDate(),
+                          maxDueDate: datetime?.toDate().valueOf(),
                         },
                       })
                     }
@@ -245,20 +234,12 @@ export const getServerSideProps = async (context: GetServerSidePropsContext) => 
   const calendar = getGoogleCalendar(session)
   const result = await calendar.events.get({ calendarId: 'primary', eventId: id as string })
   const event = result.data
-  const privateExtendedProperties = Object.fromEntries(
-    Object.entries(event.extendedProperties?.private || {}).map(([key, value]) => [key, JSON.parse(value)])
-  )
-  const sharedExtendedProperties = Object.fromEntries(
-    Object.entries(event.extendedProperties?.shared || {}).map(([key, value]) => [key, JSON.parse(value)])
-  )
+  const extendedProperties = parseExtendedProperties(event)
 
   return {
     props: {
       event,
-      extendedProperties: {
-        private: privateExtendedProperties,
-        shared: sharedExtendedProperties,
-      },
+      extendedProperties,
       session,
     },
   }

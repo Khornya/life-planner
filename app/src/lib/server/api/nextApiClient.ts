@@ -6,7 +6,7 @@ import { logger } from '@/lib/tools/logger'
 // Used by the client to communicate with NextJS API
 let api: AxiosInstance
 
-export const getExpressClient = (): AxiosInstance => {
+export const getNextApiClient = (): AxiosInstance => {
   if (!api) {
     api = axios.create({
       baseURL: process.env.NEXT_PUBLIC_HOST_BASE_URL,

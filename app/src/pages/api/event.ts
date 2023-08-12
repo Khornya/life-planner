@@ -2,7 +2,7 @@ import { getServerSession } from 'next-auth/next'
 import { createRouter } from 'next-connect'
 import { NextApiRequest, NextApiResponse } from 'next/types'
 import { authOptions } from './auth/[...nextauth]'
-import { getGoogleCalendar } from '@/lib/client/google/calendar'
+import { getGoogleCalendar } from '@/lib/server/api/google/calendar'
 
 const router = createRouter<NextApiRequest, NextApiResponse>()
 

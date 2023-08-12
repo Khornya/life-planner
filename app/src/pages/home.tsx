@@ -9,7 +9,9 @@ import '@/styles/home.css'
 import { useRouter } from 'next/navigation'
 import { authOptions } from './api/auth/[...nextauth]'
 import { getServerSession } from 'next-auth/next'
-import { getGoogleCalendar } from '@/lib/client/google/calendar'
+import { getGoogleCalendar } from '@/lib/server/api/google/calendar'
+import { getTaskSchedulerClient } from '@/lib/server/api/taskSchedulerClient'
+import { schedule } from '@/lib/server/api/services/scheduler'
 
 const Home: React.FC<{ events: calendar_v3.Schema$Event[]; session: Session }> = ({ events, session }) => {
   const router = useRouter()
@@ -49,7 +51,7 @@ export const getServerSideProps = async (context: GetServerSidePropsContext) => 
 
   const calendar = getGoogleCalendar(session)
 
-  const result = await calendar.events.list({
+  const events = await calendar.events.list({
     calendarId: 'primary',
     timeMin: new Date().toISOString(),
     maxResults: 10,
@@ -57,9 +59,11 @@ export const getServerSideProps = async (context: GetServerSidePropsContext) => 
     orderBy: 'startTime',
   })
 
+  const scheduledEvents = await schedule(events.data.items || [])
+
   return {
     props: {
-      events: result.data.items || [],
+      events: scheduledEvents,
       session,
     },
   }

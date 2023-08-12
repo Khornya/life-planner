@@ -16,8 +16,10 @@ def schedule(tasks, reserved_tags):
             "found": True,
             "tasks": []
         }
-    tasks['maxDueDate'] = tasks['maxDueDate'].astype('Int32')
-    tasks['dueDate'] = tasks['dueDate'].astype('Int32')
+    print(tasks)
+    tasks['maxDueDate'] = tasks['maxDueDate'].astype('Int64')
+    tasks['dueDate'] = tasks['dueDate'].astype('Int64')
+    # tasks['duration'] = tasks['duration'].astype('Int32')
     durations = list(tasks["duration"])
     impacts = list(tasks["impact"].fillna(0))
     dueDates = list(tasks['dueDate'])
@@ -96,7 +98,7 @@ def schedule(tasks, reserved_tags):
                 "start": solver.Value(all_tasks[task_id].start),
                 "isPresent": bool(solver.Value(all_tasks[task_id].is_present)),
                 "isLate": bool(solver.Value(all_tasks[task_id].is_late)),
-                "duration": duration,
+                "duration": int(duration),
                 "priority": solver.Value(all_tasks[task_id].priority),
                 "delay": solver.Value(all_tasks[task_id].delay)
             } for task_id, duration in enumerate(list(durations))]
