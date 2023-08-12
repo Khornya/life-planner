@@ -26,30 +26,47 @@ interface ScheduleEventResult {
 export const schedule: (events: calendar_v3.Schema$Event[]) => Promise<ScheduleEventResult[]> = async events => {
   const client = getTaskSchedulerClient()
 
-  const scheduleResult: ScheduleRawResult = await client.post('/', {
-    events: events.map(event => {
-      const extendedProperties = parseExtendedProperties(event)
-      return {
-        id: event.id,
-        impact: extendedProperties.private.impact || 0,
-        duration: extendedProperties.private.duration,
-        dueDate: (extendedProperties.private.dueDate || 0) / 100,
-        maxDueDate: (extendedProperties.private.maxDueDate || 0) / 100,
-        tags: extendedProperties.private.tags || [],
-      }
-    }),
+  const scheduleResponse = await client.post('/', {
+    events: events //TODO clean code
+      .map(event => {
+        const extendedProperties = parseExtendedProperties(event)
+        if (!extendedProperties.private.isFlexible) return undefined
+        return {
+          id: event.id,
+          impact: extendedProperties.private.impact || 0,
+          duration: extendedProperties.private.duration || 1,
+          dueDate: Math.ceil((extendedProperties.private.dueDate || 0) / 300),
+          maxDueDate: Math.ceil((extendedProperties.private.maxDueDate || 0) / 300),
+          tags: extendedProperties.private.tags || [],
+        }
+      })
+      .filter(event => !!event),
+    reservedIntervals: events
+      .map(event => {
+        const extendedProperties = parseExtendedProperties(event)
+        if (extendedProperties.private.isFlexible) return undefined
+        return {
+          id: event.id,
+          start: Math.ceil(Date.parse(event.start?.dateTime || `${event.start?.date}T00:00:00+02:00`) / 300),
+          end: Math.ceil(Date.parse(event.end?.dateTime || `${event.end?.date}T00:00:00+02:00`) / 300),
+        }
+      })
+      .filter(event => !!event),
     reservedTags: [], //TODO pass reserved tags
+    timestamp: Date.now(),
   })
+
+  const scheduleResult: ScheduleRawResult = scheduleResponse.data
 
   if (!scheduleResult.found) throw new Error('No solution found')
 
   return events.map(event => {
-    const scheduledEvent = scheduleResult.tasks[event.id]
+    const scheduledEvent: Task = scheduleResult.tasks[event.id]
     const extendedProperties = parseExtendedProperties(event)
     return {
       event,
       extendedProperties,
-      scheduledEvent,
+      scheduledEvent: scheduledEvent ? { ...scheduledEvent, start: scheduledEvent.start * 300 } : null,
     }
   })
 }

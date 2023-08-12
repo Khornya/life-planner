@@ -1,3 +1,4 @@
+import math
 from flask import Flask, request, jsonify
 from schedule_ortools import schedule
 import pandas as pd
@@ -12,7 +13,7 @@ def schedule_events():
         data = request.get_json()
         tasks = pd.json_normalize(data['events'])
         reserved_tags = pd.json_normalize(data['reservedTags'])
-        result = schedule(tasks, reserved_tags)
+        result = schedule(tasks, reserved_tags, math.ceil(data['timestamp'] / 300))
         return result, 200
     except Exception as e:
         traceback.print_exception(e)

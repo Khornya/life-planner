@@ -10,7 +10,7 @@ task_type = collections.namedtuple('task_type', 'id start end is_present interva
 assigned_task_type = collections.namedtuple('assigned_task_type', 'start task duration priority is_present delay is_late')
 reserved_tag_interval = collections.namedtuple('reserved_tag_interval', 'interval tags')
 
-def schedule(tasks, reserved_tags):
+def schedule(tasks, reserved_tags, start):
     if not len(tasks):
         return {
             "found": True,
@@ -38,10 +38,14 @@ def schedule(tasks, reserved_tags):
     for index, row in reserved_tags.iterrows():
         reserved_tag_intervals.append(reserved_tag_interval(tags= row['tags'], interval=model.NewIntervalVar(row['start'], row['end'] - row['start'], row['end'], f'reserved_interval_{index}')))
 
+    reserved_event_intervals = []
+    for index, row in reserved_tags.iterrows():
+        reserved_event_intervals.append(model.NewIntervalVar(row['start'], row['end'] - row['start'], row['end']))
+
     for task_id, duration in enumerate(list(durations)):
         suffix = '_%i' % (task_id)
-        start_var = model.NewIntVar(0, horizon - duration, 'start' + suffix)
-        end_var = model.NewIntVar(0, horizon, 'end' + suffix)
+        start_var = model.NewIntVar(start, horizon - duration, 'start' + suffix)
+        end_var = model.NewIntVar(start, horizon, 'end' + suffix)
         is_present_var = model.NewBoolVar('is_present' + suffix)
         is_late_var = model.NewBoolVar('is_late' + suffix)
         interval_var = model.NewOptionalIntervalVar(start_var, duration, end_var, is_present_var, 'interval' + suffix)
@@ -65,6 +69,8 @@ def schedule(tasks, reserved_tags):
         for reserved_interval in reserved_tag_intervals:
             if not(len([value for value in reserved_interval.tags if value in tags[task_id]])):
                 incompatible_intervals.append(reserved_interval.interval)
+        for reserved_interval in reserved_event_intervals:
+            incompatible_intervals.append(reserved_interval)
         model.AddNoOverlap(incompatible_intervals + [interval_var])
         all_tasks[task_id] = task_type(id=tasks.iloc[task_id]['id'], start=start_var, end=end_var, is_present=is_present_var, interval=interval_var, raw_priority=raw_priority, priority=priority_var, delay=delay_var, is_late=is_late_var)
     
@@ -93,15 +99,16 @@ def schedule(tasks, reserved_tags):
             ))
         return {
             "found": True,
-            "tasks": [{
-                "id": all_tasks[task_id].id,
-                "start": solver.Value(all_tasks[task_id].start),
-                "isPresent": bool(solver.Value(all_tasks[task_id].is_present)),
-                "isLate": bool(solver.Value(all_tasks[task_id].is_late)),
-                "duration": int(duration),
-                "priority": solver.Value(all_tasks[task_id].priority),
-                "delay": solver.Value(all_tasks[task_id].delay)
-            } for task_id, duration in enumerate(list(durations))]
+            "tasks": {
+                v.id: {
+                    "start": solver.Value(v.start),
+                    "isPresent": bool(solver.Value(v.is_present)),
+                    "isLate": bool(solver.Value(v.is_late)),
+                    "duration": int(duration),
+                    "priority": solver.Value(v.priority),
+                    "delay": solver.Value(v.delay)
+                } for k, v in all_tasks.items()
+            }
         }
     else:
         print('No solution found')

@@ -63,7 +63,7 @@ export const getServerSideProps = async (context: GetServerSidePropsContext) => 
 
   return {
     props: {
-      events: scheduledEvents,
+      events: events.data.items,
       session,
     },
   }

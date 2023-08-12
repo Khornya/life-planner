@@ -12,8 +12,6 @@ export const getTaskSchedulerClient = (): AxiosInstance => {
       timeout: 50000,
     })
 
-    console.log(api)
-
     api.interceptors.request.use(request => {
       logger('log', 'Starting Request', { baseUrl: request.baseURL, method: request.method, url: request.url, data: request.data })
       return request
