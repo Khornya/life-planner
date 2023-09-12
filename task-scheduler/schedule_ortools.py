@@ -16,7 +16,6 @@ def schedule(tasks, reserved_tags, start):
             "found": True,
             "tasks": []
         }
-    print(tasks)
     tasks['maxDueDate'] = tasks['maxDueDate'].astype('Int64')
     tasks['dueDate'] = tasks['dueDate'].astype('Int64')
     # tasks['duration'] = tasks['duration'].astype('Int32')
@@ -26,7 +25,7 @@ def schedule(tasks, reserved_tags, start):
     maxDueDates = list(tasks['maxDueDate'])
     tags = list(tasks['tags'])
 
-    horizon = max(tasks['maxDueDate'].max(), 1000)
+    horizon = tasks['maxDueDate'].max()
     max_raw_priority = math.floor(max([impact*100/durations[task_id] for task_id, impact in enumerate(impacts)]))
 
     # Create the model.

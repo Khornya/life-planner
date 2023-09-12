@@ -1,0 +1,7 @@
+.fc-event.flexible {
+  color: red;
+
+  & div {
+    border-color: red;
+  }
+}

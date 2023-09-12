@@ -2,7 +2,22 @@ import { calendar_v3 } from 'googleapis'
 import { getTaskSchedulerClient } from '../taskSchedulerClient'
 import { ExtendedProperties, parseExtendedProperties } from '../google/calendar'
 
-interface Task {
+type SchedulerInputEvent = {
+  id: string
+  impact: number
+  duration: number
+  dueDate: number
+  maxDueDate: number
+  tags: string[]
+}
+
+type SchedulerInputInterval = {
+  id: string
+  start: number
+  end: number
+}
+
+export type Task = {
   delay: number
   duration: number
   id: string
@@ -12,61 +27,85 @@ interface Task {
   start: number
 }
 
-interface ScheduleRawResult {
+type ScheduleRawResult = {
   found: boolean
   tasks: Task[]
 }
 
-interface ScheduleEventResult {
-  event: calendar_v3.Schema$Event
-  extendedProperties: ExtendedProperties
-  scheduledEvent: Task
+export type ScheduleEventResult = Event & {
+  scheduledEvent: Task | null
 }
 
-export const schedule: (events: calendar_v3.Schema$Event[]) => Promise<ScheduleEventResult[]> = async events => {
-  const client = getTaskSchedulerClient()
+export type Event = {
+  event: calendar_v3.Schema$Event
+  extendedProperties: ExtendedProperties
+}
 
-  const scheduleResponse = await client.post('/', {
-    events: events //TODO clean code
-      .map(event => {
-        const extendedProperties = parseExtendedProperties(event)
-        if (!extendedProperties.private.isFlexible) return undefined
-        return {
-          id: event.id,
-          impact: extendedProperties.private.impact || 0,
-          duration: extendedProperties.private.duration || 1,
-          dueDate: Math.ceil((extendedProperties.private.dueDate || 0) / 300),
-          maxDueDate: Math.ceil((extendedProperties.private.maxDueDate || 0) / 300),
-          tags: extendedProperties.private.tags || [],
-        }
-      })
-      .filter(event => !!event),
-    reservedIntervals: events
-      .map(event => {
-        const extendedProperties = parseExtendedProperties(event)
-        if (extendedProperties.private.isFlexible) return undefined
-        return {
-          id: event.id,
-          start: Math.ceil(Date.parse(event.start?.dateTime || `${event.start?.date}T00:00:00+02:00`) / 300),
-          end: Math.ceil(Date.parse(event.end?.dateTime || `${event.end?.date}T00:00:00+02:00`) / 300),
-        }
-      })
-      .filter(event => !!event),
-    reservedTags: [], //TODO pass reserved tags
-    timestamp: Date.now(),
-  })
-
-  const scheduleResult: ScheduleRawResult = scheduleResponse.data
-
-  if (!scheduleResult.found) throw new Error('No solution found')
-
-  return events.map(event => {
-    const scheduledEvent: Task = scheduleResult.tasks[event.id]
+export const parseGoogleEvent: (events: calendar_v3.Schema$Event[]) => Event[] = events =>
+  events.map(event => {
     const extendedProperties = parseExtendedProperties(event)
     return {
       event,
       extendedProperties,
-      scheduledEvent: scheduledEvent ? { ...scheduledEvent, start: scheduledEvent.start * 300 } : null,
+    }
+  })
+
+export const schedule: (events: calendar_v3.Schema$Event[]) => Promise<ScheduleEventResult[] | undefined> = async events => {
+  const parsedEvents = parseGoogleEvent(events)
+
+  const flexibleEvents = parsedEvents
+    .map(parsedEvent => {
+      const { event, extendedProperties } = parsedEvent
+      if (!extendedProperties.private.isFlexible) return undefined
+      return {
+        id: event.id,
+        impact: extendedProperties.private.impact || 0,
+        duration: extendedProperties.private.duration || 1,
+        dueDate: Math.ceil((extendedProperties.private.dueDate || 0) / 300 / 1000),
+        maxDueDate: Math.ceil((extendedProperties.private.maxDueDate || 0) / 300 / 1000),
+        tags: extendedProperties.private.tags || [],
+      }
+    })
+    .filter(event => !!event) as SchedulerInputEvent[]
+
+  if (!flexibleEvents.length)
+    return parsedEvents.map(parsedEvent => ({
+      ...parsedEvent,
+      scheduledEvent: null,
+    }))
+
+  const reservedIntervals = parsedEvents
+    .map(parsedEvent => {
+      const { event, extendedProperties } = parsedEvent
+      if (extendedProperties.private.isFlexible) return undefined
+      return {
+        id: event.id,
+        start: Math.ceil(Date.parse(event.start?.dateTime || `${event.start?.date}T00:00:00+02:00`) / 300),
+        end: Math.ceil(Date.parse(event.end?.dateTime || `${event.end?.date}T00:00:00+02:00`) / 300),
+      }
+    })
+    .filter(event => !!event) as SchedulerInputInterval[]
+
+  const scheduleResponse = await getTaskSchedulerClient().post('/', {
+    events: flexibleEvents,
+    reservedIntervals,
+    reservedTags: [], //TODO pass reserved tags
+    start: Math.ceil(Math.ceil(Date.now() / 1000) / 300),
+  })
+
+  const scheduleResult: ScheduleRawResult = scheduleResponse.data
+
+  if (!scheduleResult.found) return undefined
+
+  return parsedEvents.map(parsedEvent => {
+    const { event, extendedProperties } = parsedEvent
+    const scheduledEvent: Task = scheduleResult.tasks[event.id]
+    return {
+      event,
+      extendedProperties,
+      scheduledEvent: scheduledEvent
+        ? { ...scheduledEvent, start: scheduledEvent.start * 300 * 1000, duration: scheduledEvent.duration * 300 }
+        : null,
     }
   })
 }

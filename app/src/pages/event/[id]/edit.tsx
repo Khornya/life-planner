@@ -240,7 +240,10 @@ export const getServerSideProps = async (context: GetServerSidePropsContext) => 
     props: {
       event,
       extendedProperties,
-      session,
+      session: {
+        user: session.user,
+        expires: session.expires,
+      },
     },
   }
 }

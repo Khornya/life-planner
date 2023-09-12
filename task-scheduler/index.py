@@ -13,7 +13,7 @@ def schedule_events():
         data = request.get_json()
         tasks = pd.json_normalize(data['events'])
         reserved_tags = pd.json_normalize(data['reservedTags'])
-        result = schedule(tasks, reserved_tags, math.ceil(data['timestamp'] / 300))
+        result = schedule(tasks, reserved_tags, data['start'])
         return result, 200
     except Exception as e:
         traceback.print_exception(e)

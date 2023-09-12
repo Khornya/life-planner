@@ -1,19 +1,17 @@
-import type { calendar_v3 } from 'googleapis'
-import { google } from 'googleapis'
 import type { GetServerSidePropsContext } from 'next/types'
 import type { Session } from 'next-auth/core/types'
 import { signOut } from 'next-auth/react'
-import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { faPen } from '@fortawesome/free-solid-svg-icons'
 import '@/styles/home.css'
 import { useRouter } from 'next/navigation'
 import { authOptions } from './api/auth/[...nextauth]'
 import { getServerSession } from 'next-auth/next'
 import { getGoogleCalendar } from '@/lib/server/api/google/calendar'
-import { getTaskSchedulerClient } from '@/lib/server/api/taskSchedulerClient'
-import { schedule } from '@/lib/server/api/services/scheduler'
+import { ScheduleEventResult, Task, schedule } from '@/lib/server/api/services/scheduler'
+import FullCalendar from '@fullcalendar/react'
+import dayGridPlugin from '@fullcalendar/daygrid'
+import { useEffect } from 'react'
 
-const Home: React.FC<{ events: calendar_v3.Schema$Event[]; session: Session }> = ({ events, session }) => {
+const Home: React.FC<{ scheduledEvents: ScheduleEventResult[]; session: Session }> = ({ scheduledEvents, session }) => {
   const router = useRouter()
 
   return (
@@ -24,14 +22,25 @@ const Home: React.FC<{ events: calendar_v3.Schema$Event[]; session: Session }> =
         <button onClick={() => signOut()}>sign out</button>
       </div>
       <h1>My events</h1>
-      {events.map(event => {
-        return (
-          <div key={event.id}>
-            {event.start?.dateTime || event.start?.date} - {event.end?.dateTime || event.end?.date} : {event.summary}
-            <FontAwesomeIcon icon={faPen} className="icon edit-icon" onClick={() => router.push(`/event/${event.id}/edit`)} />
-          </div>
-        )
-      })}
+      {!scheduledEvents ? <p>/!\ No solution found !</p> : null}
+      <FullCalendar
+        plugins={[dayGridPlugin]}
+        initialView="dayGridWeek"
+        weekends={true}
+        events={scheduledEvents.map(scheduledEvent => ({
+          id: scheduledEvent.event.id || undefined,
+          title: scheduledEvent.event.summary as string,
+          start: scheduledEvent.extendedProperties.private.isFlexible
+            ? new Date((scheduledEvent.scheduledEvent as Task).start)
+            : Date.parse(scheduledEvent.event.start?.dateTime || scheduledEvent.event.start?.date || ''),
+          end: scheduledEvent.extendedProperties.private.isFlexible
+            ? new Date((scheduledEvent.scheduledEvent as Task).start + (scheduledEvent.scheduledEvent as Task).duration)
+            : new Date(scheduledEvent.event.end?.dateTime || scheduledEvent.event.end?.date || ''),
+          allDay: !!scheduledEvent.event.start?.date,
+          classNames: `${scheduledEvent.extendedProperties.private.isFlexible ? 'flexible' : ''}`,
+        }))}
+        eventClick={event => router.push(`/event/${event.event.id}/edit`)}
+      />
     </div>
   )
 }
@@ -63,8 +72,11 @@ export const getServerSideProps = async (context: GetServerSidePropsContext) => 
 
   return {
     props: {
-      events: events.data.items,
-      session,
+      scheduledEvents: scheduledEvents,
+      session: {
+        user: session.user,
+        expires: session.expires,
+      },
     },
   }
 }
