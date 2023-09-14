@@ -86,7 +86,7 @@ const EventEdit: React.FC<{ event: calendar_v3.Schema$Event; extendedProperties:
                 }}
                 value={dayjs(modifiedEvent.end?.dateTime)}
                 onChange={datetime =>
-                  setModifiedEvent({ ...modifiedEvent, start: { ...modifiedEvent.start, dateTime: datetime?.toISOString() } })
+                  setModifiedEvent({ ...modifiedEvent, end: { ...modifiedEvent.end, dateTime: datetime?.toISOString() } })
                 }
               />
             </Grid>

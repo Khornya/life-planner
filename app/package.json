@@ -32,6 +32,7 @@
     "dayjs": "^1.11.9",
     "googleapis": "^122.0.0",
     "i18next": "^22.4.11",
+    "moment": "^2.29.4",
     "next": "^13.4.5",
     "next-auth": "^4.22.3",
     "next-connect": "^1.0.0",

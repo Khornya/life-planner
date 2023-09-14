@@ -50,44 +50,43 @@ export const parseGoogleEvent: (events: calendar_v3.Schema$Event[]) => Event[] =
     }
   })
 
-export const schedule: (events: calendar_v3.Schema$Event[]) => Promise<ScheduleEventResult[] | undefined> = async events => {
-  const parsedEvents = parseGoogleEvent(events)
-
-  const flexibleEvents = parsedEvents
-    .map(parsedEvent => {
-      const { event, extendedProperties } = parsedEvent
-      if (!extendedProperties.private.isFlexible) return undefined
-      return {
-        id: event.id,
-        impact: extendedProperties.private.impact || 0,
-        duration: extendedProperties.private.duration || 1,
-        dueDate: Math.ceil((extendedProperties.private.dueDate || 0) / 300 / 1000),
-        maxDueDate: Math.ceil((extendedProperties.private.maxDueDate || 0) / 300 / 1000),
-        tags: extendedProperties.private.tags || [],
-      }
-    })
-    .filter(event => !!event) as SchedulerInputEvent[]
+export const schedule: (
+  regularEvents: calendar_v3.Schema$Event[],
+  flexibleEvents: calendar_v3.Schema$Event[]
+) => Promise<ScheduleEventResult[] | undefined> = async (regularEvents, flexibleEvents) => {
+  const parsedRegularEvents = parseGoogleEvent(regularEvents)
 
   if (!flexibleEvents.length)
-    return parsedEvents.map(parsedEvent => ({
+    return parsedRegularEvents.map(parsedEvent => ({
       ...parsedEvent,
       scheduledEvent: null,
     }))
 
-  const reservedIntervals = parsedEvents
-    .map(parsedEvent => {
-      const { event, extendedProperties } = parsedEvent
-      if (extendedProperties.private.isFlexible) return undefined
-      return {
-        id: event.id,
-        start: Math.ceil(Date.parse(event.start?.dateTime || `${event.start?.date}T00:00:00+02:00`) / 300),
-        end: Math.ceil(Date.parse(event.end?.dateTime || `${event.end?.date}T00:00:00+02:00`) / 300),
-      }
-    })
-    .filter(event => !!event) as SchedulerInputInterval[]
+  const parsedFlexibleEvents = parseGoogleEvent(flexibleEvents)
+
+  const schedulerInputEvents: SchedulerInputEvent[] = parsedFlexibleEvents.map(parsedEvent => {
+    const { event, extendedProperties } = parsedEvent
+    return {
+      id: event.id as string,
+      impact: extendedProperties.private.impact || 0,
+      duration: extendedProperties.private.duration || 1,
+      dueDate: Math.ceil((extendedProperties.private.dueDate || 0) / 300 / 1000),
+      maxDueDate: Math.ceil((extendedProperties.private.maxDueDate || 0) / 300 / 1000),
+      tags: extendedProperties.private.tags || [],
+    }
+  })
+
+  const reservedIntervals = parsedRegularEvents.map(parsedEvent => {
+    const { event } = parsedEvent
+    return {
+      id: event.id,
+      start: Math.ceil(Date.parse(event.start?.dateTime || `${event.start?.date}T00:00:00+02:00`) / 300),
+      end: Math.ceil(Date.parse(event.end?.dateTime || `${event.end?.date}T00:00:00+02:00`) / 300),
+    }
+  })
 
   const scheduleResponse = await getTaskSchedulerClient().post('/', {
-    events: flexibleEvents,
+    events: schedulerInputEvents,
     reservedIntervals,
     reservedTags: [], //TODO pass reserved tags
     start: Math.ceil(Math.ceil(Date.now() / 1000) / 300),
@@ -97,15 +96,22 @@ export const schedule: (events: calendar_v3.Schema$Event[]) => Promise<ScheduleE
 
   if (!scheduleResult.found) return undefined
 
-  return parsedEvents.map(parsedEvent => {
-    const { event, extendedProperties } = parsedEvent
-    const scheduledEvent: Task = scheduleResult.tasks[event.id]
-    return {
-      event,
-      extendedProperties,
-      scheduledEvent: scheduledEvent
-        ? { ...scheduledEvent, start: scheduledEvent.start * 300 * 1000, duration: scheduledEvent.duration * 300 }
-        : null,
-    }
-  })
+  return (
+    parsedRegularEvents.map(parsedEvent => ({
+      ...parsedEvent,
+      scheduledEvent: null,
+    })) as ScheduleEventResult[]
+  ).concat(
+    parsedFlexibleEvents.map(parsedFlexibleEvent => {
+      const { event, extendedProperties } = parsedFlexibleEvent
+      const scheduledEvent: Task = scheduleResult.tasks[event.id]
+      return {
+        event,
+        extendedProperties,
+        scheduledEvent: scheduledEvent
+          ? { ...scheduledEvent, start: scheduledEvent.start * 300 * 1000, duration: scheduledEvent.duration * 300 }
+          : null,
+      }
+    })
+  )
 }

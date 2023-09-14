@@ -10,6 +10,8 @@ import { ScheduleEventResult, Task, schedule } from '@/lib/server/api/services/s
 import FullCalendar from '@fullcalendar/react'
 import dayGridPlugin from '@fullcalendar/daygrid'
 import { useEffect } from 'react'
+import { logger } from '@/lib/tools/logger'
+import moment from 'moment'
 
 const Home: React.FC<{ scheduledEvents: ScheduleEventResult[]; session: Session }> = ({ scheduledEvents, session }) => {
   const router = useRouter()
@@ -30,10 +32,10 @@ const Home: React.FC<{ scheduledEvents: ScheduleEventResult[]; session: Session 
         events={scheduledEvents.map(scheduledEvent => ({
           id: scheduledEvent.event.id || undefined,
           title: scheduledEvent.event.summary as string,
-          start: scheduledEvent.extendedProperties.private.isFlexible
+          start: scheduledEvent.scheduledEvent
             ? new Date((scheduledEvent.scheduledEvent as Task).start)
             : Date.parse(scheduledEvent.event.start?.dateTime || scheduledEvent.event.start?.date || ''),
-          end: scheduledEvent.extendedProperties.private.isFlexible
+          end: scheduledEvent.scheduledEvent
             ? new Date((scheduledEvent.scheduledEvent as Task).start + (scheduledEvent.scheduledEvent as Task).duration)
             : new Date(scheduledEvent.event.end?.dateTime || scheduledEvent.event.end?.date || ''),
           allDay: !!scheduledEvent.event.start?.date,
@@ -60,15 +62,21 @@ export const getServerSideProps = async (context: GetServerSidePropsContext) => 
 
   const calendar = getGoogleCalendar(session)
 
-  const events = await calendar.events.list({
+  const regularEvents = await calendar.events.list({
     calendarId: 'primary',
-    timeMin: new Date().toISOString(),
-    maxResults: 10,
-    singleEvents: true,
-    orderBy: 'startTime',
+    timeMin: moment().subtract(1, 'months').toISOString(),
   })
 
-  const scheduledEvents = await schedule(events.data.items || [])
+  const flexibleEvents = await calendar.events.list({
+    calendarId: 'primary',
+    timeMin: moment('01/01/1900 00:00:00').toISOString(),
+    timeMax: moment('02/01/1900 00:00:00').toISOString(),
+    privateExtendedProperty: ['isFlexible=true'],
+  })
+
+  if (regularEvents.data.nextPageToken) logger('warn', 'More events available')
+
+  const scheduledEvents = await schedule(regularEvents.data.items || [], flexibleEvents.data.items || [])
 
   return {
     props: {
