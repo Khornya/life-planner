@@ -1,7 +1,7 @@
 import '@/styles/index.css'
 
 import type { GetServerSidePropsContext } from 'next/types'
-import { getSession, signIn, signOut, useSession } from 'next-auth/react'
+import { signIn, useSession } from 'next-auth/react'
 import { getServerSession } from 'next-auth/next'
 import { authOptions } from './api/auth/[...nextauth]'
 

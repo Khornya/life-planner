@@ -59,6 +59,15 @@ export const getServerSideProps = async (context: GetServerSidePropsContext) => 
     }
   }
 
+  if ((session as any).error) {
+    return {
+      redirect: {
+        permanent: false,
+        destination: '/logout',
+      },
+    }
+  }
+
   const calendar = getGoogleCalendar(session)
 
   const regularEvents = await calendar.events.list({
