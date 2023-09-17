@@ -62,6 +62,8 @@ export const schedule: (
 
   if (!flexibleEvents.length) return scheduleEventResults
 
+  const startTime = Math.ceil(Math.ceil(Date.now() / 1000) / 300)
+
   const parsedFlexibleEvents = parseGoogleEvent(flexibleEvents)
 
   const schedulerInputEvents: SchedulerInputEvent[] = parsedFlexibleEvents.map(parsedEvent => {
@@ -76,20 +78,22 @@ export const schedule: (
     }
   })
 
-  const reservedIntervals = parsedRegularEvents.map(parsedEvent => {
-    const { event } = parsedEvent
-    return {
-      id: event.id,
-      start: Math.ceil(Date.parse(event.start?.dateTime || `${event.start?.date}T00:00:00+02:00`) / 300 / 1000),
-      end: Math.ceil(Date.parse(event.end?.dateTime || `${event.end?.date}T00:00:00+02:00`) / 300 / 1000),
-    }
-  })
+  const reservedIntervals: SchedulerInputInterval[] = parsedRegularEvents
+    .map(parsedEvent => {
+      const { event } = parsedEvent
+      return {
+        id: event.id as string,
+        start: Math.ceil(Date.parse(event.start?.dateTime || `${event.start?.date}T00:00:00+02:00`) / 300 / 1000),
+        end: Math.ceil(Date.parse(event.end?.dateTime || `${event.end?.date}T00:00:00+02:00`) / 300 / 1000),
+      }
+    })
+    .filter(event => event.end > startTime)
 
   const scheduleResponse = await getTaskSchedulerClient().post('/', {
     events: schedulerInputEvents,
     reservedIntervals,
     reservedTags: [], //TODO pass reserved tags
-    start: Math.ceil(Math.ceil(Date.now() / 1000) / 300),
+    start: startTime,
   })
 
   const scheduleResult: ScheduleRawResult = scheduleResponse.data

@@ -6,64 +6,72 @@ import math
 def invert_bit(bit):
     return 1 - bit
 
-task_type = collections.namedtuple('task_type', 'id start end is_present interval raw_priority priority delay is_late')
-assigned_task_type = collections.namedtuple('assigned_task_type', 'start task duration priority is_present delay is_late')
+task_type = collections.namedtuple('task_type', 'id start end interval raw_priority priority delay is_late')
+assigned_task_type = collections.namedtuple('assigned_task_type', 'start task duration priority delay is_late')
 reserved_tag_interval = collections.namedtuple('reserved_tag_interval', 'interval tags')
 
-def schedule(tasks, reserved_tags, start):
+def schedule(tasks, reserved_intervals, reserved_tags, start):
     if not len(tasks):
         return {
             "found": True,
             "tasks": []
         }
+    # cast dates to int64
     tasks['maxDueDate'] = tasks['maxDueDate'].astype('Int64')
     tasks['dueDate'] = tasks['dueDate'].astype('Int64')
-    # tasks['duration'] = tasks['duration'].astype('Int32')
     durations = list(tasks["duration"])
     impacts = list(tasks["impact"].fillna(0))
     dueDates = list(tasks['dueDate'])
     maxDueDates = list(tasks['maxDueDate'])
     tags = list(tasks['tags'])
 
+    # Horizon is the greatest due date
     horizon = tasks['maxDueDate'].max()
+    # Max raw priority is the greatest impact*100/duration
     max_raw_priority = math.floor(max([impact*100/durations[task_id] for task_id, impact in enumerate(impacts)]))
+    # Set maximum delay in %
+    max_delay = 10000
 
     # Create the model.
     model = cp_model.CpModel()
 
     all_tasks = {}
 
+    # Create vars for all reserved tag intervals
     reserved_tag_intervals = []
     for index, row in reserved_tags.iterrows():
-        reserved_tag_intervals.append(reserved_tag_interval(tags= row['tags'], interval=model.NewIntervalVar(row['start'], row['end'] - row['start'], row['end'], f'reserved_interval_{index}')))
+        reserved_tag_intervals.append(reserved_tag_interval(tags= row['tags'], interval=model.NewIntervalVar(row['start'], row['end'] - row['start'], row['end'], f'reserved_tag_interval_{index}')))
 
+    # Create vars for all reserved event intervals
     reserved_event_intervals = []
-    for index, row in reserved_tags.iterrows():
-        reserved_event_intervals.append(model.NewIntervalVar(row['start'], row['end'] - row['start'], row['end']))
+    for index, row in reserved_intervals.iterrows():
+        reserved_event_intervals.append(model.NewIntervalVar(row['start'], row['end'] - row['start'], row['end'], f'reserved_event_interval_{index}'))
 
+    # Create vars for all tasks
     for task_id, duration in enumerate(list(durations)):
         suffix = '_%i' % (task_id)
+        # Task starts between start and horizon
         start_var = model.NewIntVar(start, horizon - duration, 'start' + suffix)
+        # Task ends between start and horizon
         end_var = model.NewIntVar(start, horizon, 'end' + suffix)
-        is_present_var = model.NewBoolVar('is_present' + suffix)
         is_late_var = model.NewBoolVar('is_late' + suffix)
-        interval_var = model.NewOptionalIntervalVar(start_var, duration, end_var, is_present_var, 'interval' + suffix)
+        interval_var = model.NewIntervalVar(start_var, duration, end_var, 'interval' + suffix)
         if pd.notna(maxDueDates[task_id]) and maxDueDates[task_id] != dueDates[task_id]:
-            delay_var = model.NewIntVar(-100, 100, 'delay' + suffix)
+            # Create delay var
+            delay_var = model.NewIntVar(-100, max_delay, 'delay' + suffix)
             model.AddDivisionEquality(delay_var, (dueDates[task_id] - end_var)*100, maxDueDates[task_id] - dueDates[task_id])
+            # Delay is negative if task is late
             model.Add(delay_var < 0).OnlyEnforceIf(is_late_var)
+            # Delay is positive if task is on time
             model.Add(delay_var >= 0).OnlyEnforceIf(is_late_var.Not())
-            delay_var_abs = model.NewIntVar(0,100, 'delay_abs' + suffix)
-            model.AddAbsEquality(delay_var_abs, delay_var)
-            opt_delay_var = model.NewIntVar(0,100, 'opt_delay' + suffix)
-            model.AddMultiplicationEquality(opt_delay_var, [is_present_var, delay_var_abs])
         else:
+            # Create 0 delay var if due date is max due date
             delay_var = model.NewConstant(0)
-            opt_delay_var = model.NewBoolVar('opt_delay' + suffix)
-            model.Add(opt_delay_var == is_present_var)
+        # Create priority var
         raw_priority = math.floor(impacts[task_id]*100/duration)
-        priority_var = model.NewIntVar(0, max_raw_priority * 11 * 100, 'priority' + suffix)
-        model.AddMultiplicationEquality(priority_var, [raw_priority * opt_delay_var, 10 + is_late_var.Not() - 2 * is_late_var])
+        priority_var = model.NewIntVar(-max_raw_priority * 100, max_raw_priority * max_delay, 'priority' + suffix)
+        model.AddMultiplicationEquality(priority_var, [raw_priority, delay_var])
+        # Prevent reserved intervals from overlapping
         incompatible_intervals = []
         for reserved_interval in reserved_tag_intervals:
             if not(len([value for value in reserved_interval.tags if value in tags[task_id]])):
@@ -71,12 +79,14 @@ def schedule(tasks, reserved_tags, start):
         for reserved_interval in reserved_event_intervals:
             incompatible_intervals.append(reserved_interval)
         model.AddNoOverlap(incompatible_intervals + [interval_var])
-        all_tasks[task_id] = task_type(id=tasks.iloc[task_id]['id'], start=start_var, end=end_var, is_present=is_present_var, interval=interval_var, raw_priority=raw_priority, priority=priority_var, delay=delay_var, is_late=is_late_var)
+        # Add task vars to all_tasks
+        all_tasks[task_id] = task_type(id=tasks.iloc[task_id]['id'], start=start_var, end=end_var, interval=interval_var, raw_priority=raw_priority, priority=priority_var, delay=delay_var, is_late=is_late_var)
     
+    # Prevent all tasks from overlapping
     model.AddNoOverlap([all_tasks[task].interval for task in all_tasks])
 
-    # Priority objective.
-    obj_var = model.NewIntVar(0, sum([all_tasks[task_id].raw_priority * 11 * 100 for task_id in all_tasks]), name='total_priority')
+    # Maximize priority
+    obj_var = model.NewIntVar(-sum([all_tasks[task_id].raw_priority * 100 for task_id in all_tasks]), sum([all_tasks[task_id].raw_priority * max_delay for task_id in all_tasks]), name='total_priority')
     model.Add(obj_var == sum([all_tasks[task_id].priority for task_id in all_tasks]))
     model.Maximize(obj_var)
 
@@ -92,7 +102,6 @@ def schedule(tasks, reserved_tags, start):
                 task=task_id,
                 duration=duration,
                 priority=solver.Value(all_tasks[task_id].priority),
-                is_present=solver.Value(all_tasks[task_id].is_present),
                 delay=solver.Value(all_tasks[task_id].delay),
                 is_late=solver.Value(all_tasks[task_id].is_late)
             ))
@@ -101,7 +110,6 @@ def schedule(tasks, reserved_tags, start):
             "tasks": {
                 v.id: {
                     "start": solver.Value(v.start),
-                    "isPresent": bool(solver.Value(v.is_present)),
                     "isLate": bool(solver.Value(v.is_late)),
                     "duration": int(duration),
                     "priority": solver.Value(v.priority),
@@ -115,9 +123,3 @@ def schedule(tasks, reserved_tags, start):
             "found": False,
             "tasks": []
         }
-
-
-if __name__ == '__main__':
-    tasks = pd.read_csv("data/tasks.csv", sep=';', dtype={'DueDate': 'Int32', 'MaxDueDate': 'Int32'})
-    reserved_tags = pd.read_csv("data/tags.csv", sep=';', dtype={'Start': 'Int32', 'End': 'Int32'})
-    schedule(tasks, reserved_tags)
