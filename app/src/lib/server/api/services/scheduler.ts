@@ -53,14 +53,14 @@ export const parseGoogleEvent: (events: calendar_v3.Schema$Event[]) => Event[] =
 export const schedule: (
   regularEvents: calendar_v3.Schema$Event[],
   flexibleEvents: calendar_v3.Schema$Event[]
-) => Promise<ScheduleEventResult[] | undefined> = async (regularEvents, flexibleEvents) => {
+) => Promise<ScheduleEventResult[] | null> = async (regularEvents, flexibleEvents) => {
   const parsedRegularEvents = parseGoogleEvent(regularEvents)
+  const scheduleEventResults: ScheduleEventResult[] = parsedRegularEvents.map(parsedEvent => ({
+    ...parsedEvent,
+    scheduledEvent: null,
+  }))
 
-  if (!flexibleEvents.length)
-    return parsedRegularEvents.map(parsedEvent => ({
-      ...parsedEvent,
-      scheduledEvent: null,
-    }))
+  if (!flexibleEvents.length) return scheduleEventResults
 
   const parsedFlexibleEvents = parseGoogleEvent(flexibleEvents)
 
@@ -80,8 +80,8 @@ export const schedule: (
     const { event } = parsedEvent
     return {
       id: event.id,
-      start: Math.ceil(Date.parse(event.start?.dateTime || `${event.start?.date}T00:00:00+02:00`) / 300),
-      end: Math.ceil(Date.parse(event.end?.dateTime || `${event.end?.date}T00:00:00+02:00`) / 300),
+      start: Math.ceil(Date.parse(event.start?.dateTime || `${event.start?.date}T00:00:00+02:00`) / 300 / 1000),
+      end: Math.ceil(Date.parse(event.end?.dateTime || `${event.end?.date}T00:00:00+02:00`) / 300 / 1000),
     }
   })
 
@@ -94,14 +94,9 @@ export const schedule: (
 
   const scheduleResult: ScheduleRawResult = scheduleResponse.data
 
-  if (!scheduleResult.found) return undefined
+  if (!scheduleResult.found) return scheduleEventResults
 
-  return (
-    parsedRegularEvents.map(parsedEvent => ({
-      ...parsedEvent,
-      scheduledEvent: null,
-    })) as ScheduleEventResult[]
-  ).concat(
+  return scheduleEventResults.concat(
     parsedFlexibleEvents.map(parsedFlexibleEvent => {
       const { event, extendedProperties } = parsedFlexibleEvent
       const scheduledEvent: Task = scheduleResult.tasks[event.id]

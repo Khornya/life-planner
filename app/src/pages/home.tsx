@@ -9,11 +9,10 @@ import { getGoogleCalendar } from '@/lib/server/api/google/calendar'
 import { ScheduleEventResult, Task, schedule } from '@/lib/server/api/services/scheduler'
 import FullCalendar from '@fullcalendar/react'
 import dayGridPlugin from '@fullcalendar/daygrid'
-import { useEffect } from 'react'
 import { logger } from '@/lib/tools/logger'
 import moment from 'moment'
 
-const Home: React.FC<{ scheduledEvents: ScheduleEventResult[]; session: Session }> = ({ scheduledEvents, session }) => {
+const Home: React.FC<{ scheduledEvents: ScheduleEventResult[] | null; session: Session }> = ({ scheduledEvents, session }) => {
   const router = useRouter()
 
   return (
@@ -29,7 +28,7 @@ const Home: React.FC<{ scheduledEvents: ScheduleEventResult[]; session: Session 
         plugins={[dayGridPlugin]}
         initialView="dayGridWeek"
         weekends={true}
-        events={scheduledEvents.map(scheduledEvent => ({
+        events={scheduledEvents?.map(scheduledEvent => ({
           id: scheduledEvent.event.id || undefined,
           title: scheduledEvent.event.summary as string,
           start: scheduledEvent.scheduledEvent
@@ -69,9 +68,8 @@ export const getServerSideProps = async (context: GetServerSidePropsContext) => 
 
   const flexibleEvents = await calendar.events.list({
     calendarId: 'primary',
-    timeMin: moment('01/01/1900 00:00:00').toISOString(),
-    timeMax: moment('02/01/1900 00:00:00').toISOString(),
-    privateExtendedProperty: ['isFlexible=true'],
+    timeMin: '1900-01-01T00:00:00Z',
+    timeMax: '1900-01-02T00:00:00Z',
   })
 
   if (regularEvents.data.nextPageToken) logger('warn', 'More events available')
