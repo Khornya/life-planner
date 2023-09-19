@@ -12,7 +12,11 @@ import dayGridPlugin from '@fullcalendar/daygrid'
 import { logger } from '@/lib/tools/logger'
 import moment from 'moment'
 
-const Home: React.FC<{ scheduledEvents: ScheduleEventResult[] | null; session: Session }> = ({ scheduledEvents, session }) => {
+const Home: React.FC<{ scheduledEvents: ScheduleEventResult[] | null; unplannedEvents: ScheduleEventResult[]; session: Session }> = ({
+  scheduledEvents,
+  unplannedEvents,
+  session,
+}) => {
   const router = useRouter()
 
   return (
@@ -24,6 +28,7 @@ const Home: React.FC<{ scheduledEvents: ScheduleEventResult[] | null; session: S
       </div>
       <h1>My events</h1>
       {!scheduledEvents ? <p>/!\ No solution found !</p> : null}
+      {unplannedEvents.length ? <p>Unplanned events : {unplannedEvents.map(event => event.event.summary + ' ')}</p> : null}
       <FullCalendar
         plugins={[dayGridPlugin]}
         initialView="dayGridWeek"
@@ -87,7 +92,10 @@ export const getServerSideProps = async (context: GetServerSidePropsContext) => 
 
   return {
     props: {
-      scheduledEvents: scheduledEvents,
+      scheduledEvents: scheduledEvents?.filter(
+        scheduledEvent => !scheduledEvent.scheduledEvent || scheduledEvent.scheduledEvent?.isPresent
+      ),
+      unplannedEvents: scheduledEvents?.filter(scheduledEvent => scheduledEvent.scheduledEvent && !scheduledEvent.scheduledEvent.isPresent),
       session: {
         user: session.user,
         expires: session.expires,
