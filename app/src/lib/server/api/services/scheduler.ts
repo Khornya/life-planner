@@ -41,7 +41,7 @@ export type Event = {
   extendedProperties: ExtendedProperties
 }
 
-const parseGoogleEvent: (events: calendar_v3.Schema$Event[]) => Event[] = events =>
+export const parseGoogleEvent: (events: calendar_v3.Schema$Event[]) => Event[] = events =>
   events.map(event => {
     const extendedProperties = parseExtendedProperties(event)
     return {
