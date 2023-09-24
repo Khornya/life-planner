@@ -29,6 +29,10 @@ import { Event, parseGoogleEvent } from '@/lib/server/api/services/scheduler'
 import { getGoogleCalendar } from '@/lib/server/api/google/calendar'
 import { useRouter } from 'next/router'
 import moment from 'moment'
+import { MouseEventHandler, useCallback, useEffect, useState } from 'react'
+import { deleteEvents } from '@/lib/client/event'
+import { ClickAwayListener, Menu, MenuItem } from '@mui/material'
+import { redirect } from 'next/navigation'
 
 function descendingComparator(a: Event, b: Event, orderBy: string) {
   switch (orderBy) {
@@ -40,7 +44,62 @@ function descendingComparator(a: Event, b: Event, orderBy: string) {
         return 1
       }
       return 0
-    //TODO other columns
+    case 'duration':
+      if (
+        !b.extendedProperties.private.duration ||
+        (a.extendedProperties.private.duration && b.extendedProperties.private.duration < a.extendedProperties.private.duration)
+      ) {
+        return -1
+      }
+      if (
+        !a.extendedProperties.private.duration ||
+        (b.extendedProperties.private.duration && b.extendedProperties.private.duration > a.extendedProperties.private.duration)
+      ) {
+        return 1
+      }
+      return 0
+    case 'impact':
+      if (
+        !b.extendedProperties.private.impact ||
+        (a.extendedProperties.private.impact && b.extendedProperties.private.impact < a.extendedProperties.private.impact)
+      ) {
+        return -1
+      }
+      if (
+        !a.extendedProperties.private.impact ||
+        (b.extendedProperties.private.impact && b.extendedProperties.private.impact > a.extendedProperties.private.impact)
+      ) {
+        return 1
+      }
+      return 0
+    case 'dueDate':
+      if (
+        !b.extendedProperties.private.dueDate ||
+        (a.extendedProperties.private.dueDate && b.extendedProperties.private.dueDate < a.extendedProperties.private.dueDate)
+      ) {
+        return -1
+      }
+      if (
+        !a.extendedProperties.private.dueDate ||
+        (b.extendedProperties.private.dueDate && b.extendedProperties.private.dueDate > a.extendedProperties.private.dueDate)
+      ) {
+        return 1
+      }
+      return 0
+    case 'maxDueDate':
+      if (
+        !b.extendedProperties.private.maxDueDate ||
+        (a.extendedProperties.private.maxDueDate && b.extendedProperties.private.maxDueDate < a.extendedProperties.private.maxDueDate)
+      ) {
+        return -1
+      }
+      if (
+        !a.extendedProperties.private.maxDueDate ||
+        (b.extendedProperties.private.maxDueDate && b.extendedProperties.private.maxDueDate > a.extendedProperties.private.maxDueDate)
+      ) {
+        return 1
+      }
+      return 0
     default:
       return 0
   }
@@ -155,42 +214,87 @@ function EnhancedTableHead(props: EnhancedTableProps) {
 }
 
 interface EnhancedTableToolbarProps {
-  numSelected: number
+  selected: (string | null | undefined)[]
+  onFilterRows: (filterType: 'all' | 'planned' | 'unplanned') => void
 }
 
 function EnhancedTableToolbar(props: EnhancedTableToolbarProps) {
-  const { numSelected } = props
+  const { selected, onFilterRows } = props
+  const router = useRouter()
+  const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null)
+
+  const handleClick = (event: React.MouseEvent<HTMLButtonElement>) => {
+    setAnchorEl(event.currentTarget)
+  }
+
+  const handleClose: MouseEventHandler = (event, reason?: string) => {
+    setAnchorEl(null)
+  }
+
+  const handleDelete = useCallback(async () => {
+    await deleteEvents(selected.filter(item => !!item) as string[])
+    router.reload()
+  }, [selected])
 
   return (
     <Toolbar
       sx={{
         pl: { sm: 2 },
         pr: { xs: 1, sm: 1 },
-        ...(numSelected > 0 && {
+        ...(selected.length > 0 && {
           bgcolor: theme => alpha(theme.palette.primary.main, theme.palette.action.activatedOpacity),
         }),
       }}
     >
-      {numSelected > 0 ? (
+      {selected.length > 0 ? (
         <Typography sx={{ flex: '1 1 100%' }} color="inherit" variant="subtitle1" component="div">
-          {numSelected} selected
+          {selected.length} selected
         </Typography>
       ) : (
         <Typography sx={{ flex: '1 1 100%' }} variant="h6" id="tableTitle" component="div">
           Flexible events
         </Typography>
       )}
-      {numSelected > 0 ? (
+      {selected.length > 0 ? (
         <Tooltip title="Delete">
-          <IconButton>
+          <IconButton onClick={handleDelete}>
             <DeleteIcon />
           </IconButton>
         </Tooltip>
       ) : (
         <Tooltip title="Filter list">
-          <IconButton>
-            <FilterListIcon />
-          </IconButton>
+          <>
+            <IconButton onClick={handleClick}>
+              <FilterListIcon />
+            </IconButton>
+
+            <Menu open={!!anchorEl} anchorEl={anchorEl} onClose={handleClose}>
+              <MenuItem
+                onClick={e => {
+                  onFilterRows('all')
+                  handleClose(e)
+                }}
+              >
+                Show all events
+              </MenuItem>
+              <MenuItem
+                onClick={e => {
+                  onFilterRows('planned')
+                  handleClose(e)
+                }}
+              >
+                Show only planned events
+              </MenuItem>
+              <MenuItem
+                onClick={e => {
+                  onFilterRows('unplanned')
+                  handleClose(e)
+                }}
+              >
+                Show only unplanned events
+              </MenuItem>
+            </Menu>
+          </>
         </Tooltip>
       )}
     </Toolbar>
@@ -205,6 +309,8 @@ export const EnhancedTable: React.FC<{ rows: Event[] }> = ({ rows }) => {
   const [selected, setSelected] = React.useState<(string | null | undefined)[]>([])
   const [page, setPage] = React.useState(0)
   const [rowsPerPage, setRowsPerPage] = React.useState(5)
+  const [filteredRows, setFilteredRows] = useState(rows)
+  const [filterType, setFilterType] = useState<'all' | 'planned' | 'unplanned'>('all')
 
   const handleRequestSort = (event: React.MouseEvent<unknown>, property: string) => {
     const isAsc = orderBy === property && order === 'asc'
@@ -257,10 +363,32 @@ export const EnhancedTable: React.FC<{ rows: Event[] }> = ({ rows }) => {
     [order, orderBy, page, rowsPerPage]
   )
 
+  const onFilterRows = useCallback(
+    (filterType: 'all' | 'planned' | 'unplanned') => {
+      switch (filterType) {
+        case 'all':
+          setFilteredRows(visibleRows)
+          break
+        case 'planned':
+          setFilteredRows(visibleRows.filter(row => row.extendedProperties.private.isFlexible))
+          break
+        case 'unplanned':
+          setFilteredRows(visibleRows.filter(row => !row.extendedProperties.private.isFlexible))
+          break
+        default:
+      }
+    },
+    [visibleRows]
+  )
+
+  useEffect(() => {
+    onFilterRows(filterType) //TODO keep filter on page change
+  }, [visibleRows, filterType])
+
   return (
     <Box sx={{ width: '100%' }}>
       <Paper sx={{ width: '100%', mb: 2 }}>
-        <EnhancedTableToolbar numSelected={selected.length} />
+        <EnhancedTableToolbar selected={selected} onFilterRows={onFilterRows} />
         <TableContainer>
           <Table sx={{ minWidth: 750 }} aria-labelledby="tableTitle" size={'medium'}>
             <EnhancedTableHead
@@ -272,7 +400,7 @@ export const EnhancedTable: React.FC<{ rows: Event[] }> = ({ rows }) => {
               rowCount={rows.length}
             />
             <TableBody>
-              {visibleRows.map((row, index) => {
+              {filteredRows.map((row, index) => {
                 const isItemSelected = isSelected(row.event.id)
                 const labelId = `enhanced-table-checkbox-${index}`
 
@@ -299,10 +427,14 @@ export const EnhancedTable: React.FC<{ rows: Event[] }> = ({ rows }) => {
                     <TableCell component="th" id={labelId} scope="row" padding="none">
                       {row.event.summary}
                     </TableCell>
-                    <TableCell align="right">{row.extendedProperties.private.impact}</TableCell>
-                    <TableCell align="right">{row.extendedProperties.private.duration}</TableCell>
-                    <TableCell align="right">{moment().to(row.extendedProperties.private.dueDate)}</TableCell>
-                    <TableCell align="right">{moment().to(row.extendedProperties.private.maxDueDate)}</TableCell>
+                    <TableCell align="right">{row.extendedProperties.private.duration || 'N/A'}</TableCell>
+                    <TableCell align="right">{row.extendedProperties.private.impact || 'N/A'}</TableCell>
+                    <TableCell align="right">
+                      {row.extendedProperties.private.isFlexible ? moment().to(row.extendedProperties.private.dueDate) : 'N/A'}
+                    </TableCell>
+                    <TableCell align="right">
+                      {row.extendedProperties.private.isFlexible ? moment().to(row.extendedProperties.private.maxDueDate) : 'N/A'}
+                    </TableCell>
                     <TableCell padding="checkbox">
                       <Tooltip title={'Edit'}>
                         <IconButton onClick={() => router.push(`/event/${row.event.id}/edit`)}>

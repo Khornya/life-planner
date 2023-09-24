@@ -26,4 +26,22 @@ router.post(async (req, res) => {
   )
 })
 
+router.delete(async (req, res) => {
+  const ids: string[] = JSON.parse(decodeURIComponent(req.query.ids as string))
+
+  const session = await getServerSession(req, res, authOptions)
+
+  if (!session) {
+    return res.status(401).json({ message: 'You must be logged in.' })
+  }
+
+  const calendar = getGoogleCalendar(session)
+
+  for (const id of ids) {
+    await calendar.events.delete({ calendarId: 'primary', eventId: id })
+  }
+
+  return res.status(200).end()
+})
+
 export default router.handler()
