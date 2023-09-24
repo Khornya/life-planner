@@ -10,7 +10,7 @@ const MyApp = ({ Component, pageProps }: AppProps) => (
   <>
     <Head>
       <meta name="viewport" content="initial-scale=1, width=device-width" />
-      <link rel="shortcut icon" href="/assets/favicon.ico" />
+      <link rel="shortcut icon" href="/app/favicon.ico" />
     </Head>
     <SessionProvider session={pageProps.session}>
       <LocalizationProvider dateAdapter={AdapterDayjs}>

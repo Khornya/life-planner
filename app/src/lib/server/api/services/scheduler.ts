@@ -38,7 +38,7 @@ export type ScheduleEventResult = Event & {
 
 export type Event = {
   event: calendar_v3.Schema$Event
-  extendedProperties: ExtendedProperties
+  extendedProperties?: ExtendedProperties
 }
 
 export const parseGoogleEvent: (events: calendar_v3.Schema$Event[]) => Event[] = events =>
@@ -70,11 +70,11 @@ export const schedule: (
     const { event, extendedProperties } = parsedEvent
     return {
       id: event.id as string,
-      impact: extendedProperties.private.impact || 0,
-      duration: extendedProperties.private.duration || 1,
-      dueDate: Math.ceil((extendedProperties.private.dueDate || 0) / 300 / 1000),
-      maxDueDate: Math.ceil((extendedProperties.private.maxDueDate || 0) / 300 / 1000),
-      tags: extendedProperties.private.tags || [],
+      impact: extendedProperties?.private.impact || 0,
+      duration: extendedProperties?.private.duration || 1,
+      dueDate: Math.ceil((extendedProperties?.private.dueDate || 0) / 300 / 1000),
+      maxDueDate: Math.ceil((extendedProperties?.private.maxDueDate || 0) / 300 / 1000),
+      tags: extendedProperties?.private.tags || [],
     }
   })
 
@@ -103,7 +103,7 @@ export const schedule: (
   return scheduleEventResults.concat(
     parsedFlexibleEvents.map(parsedFlexibleEvent => {
       const { event, extendedProperties } = parsedFlexibleEvent
-      const scheduledEvent: Task = scheduleResult.tasks[event.id]
+      const scheduledEvent: Task = scheduleResult.tasks[event.id as any]
       return {
         event,
         extendedProperties,
