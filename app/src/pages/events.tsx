@@ -44,21 +44,36 @@ const EventsPage: React.FC<{ rows: Event[] }> = ({ rows }) => {
       headerName: 'Priority',
       type: 'number',
       width: 110,
-      valueGetter: (params: GridValueGetterParams) => params.row.impact / params.row.duration || 'N/A',
+      valueGetter: params => params.row.impact / params.row.duration || undefined,
+      valueFormatter: params => {
+        if (!params.id) return params.value
+        const row = params.api.getRow(params.id)
+        return row.isFlexible ? params.value : 'N/A'
+      },
     },
     {
       field: 'dueDate',
       headerName: 'Due date',
-      type: 'number',
+      type: 'dateTime',
       width: 110,
-      valueGetter: (params: GridValueGetterParams) => (params.row.isFlexible ? moment().to(params.row.dueDate) : 'N/A'),
+      valueGetter: params => (params.row.dueDate ? new Date(params.row.dueDate) : undefined),
+      valueFormatter: params => {
+        if (!params.id) return params.value
+        const row = params.api.getRow(params.id)
+        return row.isFlexible ? moment().to(row.dueDate) : 'N/A'
+      },
     },
     {
       field: 'maxDueDate',
       headerName: 'Max due date',
-      type: 'number',
+      type: 'dateTime',
       width: 110,
-      valueGetter: (params: GridValueGetterParams) => (params.row.isFlexible ? moment().to(params.row.maxDueDate) : 'N/A'),
+      valueGetter: params => (params.row.maxDueDate ? new Date(params.row.maxDueDate) : undefined),
+      valueFormatter: params => {
+        if (!params.id) return params.value
+        const row = params.api.getRow(params.id)
+        return row.isFlexible ? moment().to(row.maxDueDate) : 'N/A'
+      },
     },
     {
       field: 'actions',
