@@ -4,9 +4,8 @@ import type { GetServerSidePropsContext } from 'next/types'
 import { getServerSession } from 'next-auth/next'
 import { authOptions } from './api/auth/[...nextauth]'
 
-import * as React from 'react'
 import Box from '@mui/material/Box'
-import { DataGrid, GridActionsCellItem, GridColDef, GridRowId, GridValueGetterParams } from '@mui/x-data-grid'
+import { DataGrid, GridActionsCellItem, GridColDef } from '@mui/x-data-grid'
 import { getGoogleCalendar } from '@/lib/server/api/google/calendar'
 import { parseGoogleEvent } from '@/lib/server/api/services/scheduler'
 import { Event } from '@/lib/server/api/services/scheduler'
@@ -15,17 +14,25 @@ import EditIcon from '@mui/icons-material/Edit'
 import moment from 'moment'
 import { useRouter } from 'next/router'
 import { deleteEvents } from '@/lib/client/event'
+import { useState } from 'react'
+import { Button, Modal, Typography } from '@mui/material'
+import { modalStyle } from '@/components/modal/modal'
 
 const EventsPage: React.FC<{ rows: Event[] }> = ({ rows }) => {
   const router = useRouter()
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false)
+  const [eventToDelete, setEventToDelete] = useState<Event | undefined>(undefined)
 
   const handleEditClick = (id: string) => {
     router.push(`/event/${id}/edit`)
   }
 
   const handleDeleteClick = async (id: string) => {
-    await deleteEvents([id])
+    setEventToDelete(rows.find(row => row.event.id === id))
+    setIsDeleteModalOpen(true)
   }
+
+  const handleCloseDeleteModal = () => setIsDeleteModalOpen(false)
 
   const columns: GridColDef[] = [
     { field: 'title', headerName: 'Title', width: 300 },
@@ -97,30 +104,56 @@ const EventsPage: React.FC<{ rows: Event[] }> = ({ rows }) => {
   ]
 
   return (
-    <Box sx={{ height: 400, width: '100%' }}>
-      <DataGrid
-        rows={rows.map(row => ({
-          id: row.event.id,
-          title: row.event.summary,
-          duration: row.extendedProperties?.private.duration,
-          impact: row.extendedProperties?.private.impact,
-          dueDate: row.extendedProperties?.private.dueDate,
-          maxDueDate: row.extendedProperties?.private.maxDueDate,
-          isFlexible: row.extendedProperties?.private.isFlexible,
-        }))}
-        columns={columns}
-        initialState={{
-          pagination: {
-            paginationModel: {
-              pageSize: 5,
+    <>
+      <Box sx={{ height: 400, width: '100%' }}>
+        <DataGrid
+          rows={rows.map(row => ({
+            id: row.event.id,
+            title: row.event.summary,
+            duration: row.extendedProperties?.private.duration,
+            impact: row.extendedProperties?.private.impact,
+            dueDate: row.extendedProperties?.private.dueDate,
+            maxDueDate: row.extendedProperties?.private.maxDueDate,
+            isFlexible: row.extendedProperties?.private.isFlexible,
+          }))}
+          columns={columns}
+          initialState={{
+            pagination: {
+              paginationModel: {
+                pageSize: 5,
+              },
             },
-          },
-        }}
-        pageSizeOptions={[5]}
-        checkboxSelection
-        disableRowSelectionOnClick
-      />
-    </Box>
+          }}
+          pageSizeOptions={[5]}
+          checkboxSelection
+          disableRowSelectionOnClick
+        />
+      </Box>
+      <Modal
+        open={isDeleteModalOpen}
+        onClose={handleCloseDeleteModal}
+        aria-labelledby="modal-modal-title"
+        aria-describedby="modal-modal-description"
+      >
+        <Box sx={modalStyle}>
+          <Typography id="modal-modal-title" variant="h6" component="h2">
+            Delete event
+          </Typography>
+          <Typography id="modal-modal-description" sx={{ mt: 2 }}>
+            Are you sure you want to delete event '{eventToDelete?.event.summary}' ?
+          </Typography>
+          <Button
+            onClick={async () => {
+              if (eventToDelete?.event.id) await deleteEvents([eventToDelete.event.id])
+              router.reload()
+            }}
+          >
+            Delete
+          </Button>
+          <Button onClick={handleCloseDeleteModal}>Cancel</Button>
+        </Box>
+      </Modal>
+    </>
   )
 }
 

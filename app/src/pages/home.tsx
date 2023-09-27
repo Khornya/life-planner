@@ -11,6 +11,7 @@ import FullCalendar from '@fullcalendar/react'
 import dayGridPlugin from '@fullcalendar/daygrid'
 import { logger } from '@/lib/tools/logger'
 import moment from 'moment'
+import Link from 'next/link'
 
 const Home: React.FC<{ scheduledEvents: ScheduleEventResult[] | null; unplannedEvents: ScheduleEventResult[]; session: Session }> = ({
   scheduledEvents,
@@ -27,6 +28,7 @@ const Home: React.FC<{ scheduledEvents: ScheduleEventResult[] | null; unplannedE
         <button onClick={() => signOut()}>sign out</button>
       </div>
       <h1>My events</h1>
+      <Link href={'/events'}>See task list</Link>
       {!scheduledEvents ? <p>/!\ No solution found !</p> : null}
       {unplannedEvents.length ? <p>Unplanned events : {unplannedEvents.map(event => event.event.summary + ' ')}</p> : null}
       <FullCalendar
@@ -43,7 +45,7 @@ const Home: React.FC<{ scheduledEvents: ScheduleEventResult[] | null; unplannedE
             ? new Date((scheduledEvent.scheduledEvent as Task).start + (scheduledEvent.scheduledEvent as Task).duration)
             : new Date(scheduledEvent.event.end?.dateTime || scheduledEvent.event.end?.date || ''),
           allDay: !!scheduledEvent.event.start?.date,
-          classNames: `${scheduledEvent.extendedProperties.private.isFlexible ? 'flexible' : ''}`,
+          classNames: `${scheduledEvent.extendedProperties?.private.isFlexible ? 'flexible' : ''}`,
         }))}
         eventClick={event => router.push(`/event/${event.event.id}/edit`)}
       />
