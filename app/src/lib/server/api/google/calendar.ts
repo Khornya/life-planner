@@ -17,7 +17,7 @@ export interface ExtendedProperties {
 let auth: OAuth2Client
 
 export const getGoogleCalendar = (session: Session) => {
-  const { accessToken, refreshToken } = session
+  const { accessToken, refreshToken } = session as any
 
   if (!auth) {
     const clientId = process.env.GOOGLE_ID
