@@ -1,5 +1,0 @@
-pandas
-PuLP
-cbc
-ortools
-Flask

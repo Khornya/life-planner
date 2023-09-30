@@ -19,8 +19,5 @@
   "prettier.semi": false,
   "prettier.singleQuote": true,
   "prettier.printWidth": 140,
-  "[python]": {
-    "editor.defaultFormatter": "ms-python.black-formatter"
-  },
-  "python.formatting.provider": "none"
+  "vs-code-prettier-eslint.prettierLast": true
 }

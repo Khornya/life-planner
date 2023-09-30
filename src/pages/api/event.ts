@@ -37,9 +37,8 @@ router.delete(async (req, res) => {
 
   const calendar = getGoogleCalendar(session)
 
-  for (const id of ids) {
-    await calendar.events.delete({ calendarId: 'primary', eventId: id })
-  }
+  const deletePromises = ids.map(id => calendar.events.delete({ calendarId: 'primary', eventId: id }))
+  Promise.all(deletePromises)
 
   return res.status(200).end()
 })
