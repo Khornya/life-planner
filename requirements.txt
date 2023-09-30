@@ -1,0 +1,5 @@
+pandas==1.5.3
+PuLP==2.7.0
+cbc
+ortools==9.4.1874
+Flask==2.2.2
