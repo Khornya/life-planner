@@ -7,10 +7,11 @@ import { getServerSession } from 'next-auth/next'
 import { authOptions } from '@/pages/api/auth/[...nextauth]'
 import { editEvent } from '@/lib/client/event'
 import { ExtendedProperties, getGoogleCalendar, parseExtendedProperties } from '@/lib/server/api/google/calendar'
-import { Box, Button, Container, FormControlLabel, InputAdornment, Switch, TextField, Typography } from '@mui/material'
+import { Autocomplete, Box, Button, Container, FormControlLabel, InputAdornment, Switch, TextField, Typography } from '@mui/material'
 import Grid from '@mui/material/Unstable_Grid2'
 import { DateTimePicker, renderTimeViewClock } from '@mui/x-date-pickers'
 import dayjs from 'dayjs'
+import { availableTags } from '@/pages/reserved/[id]/edit'
 
 const EventEdit: React.FC<{ event: calendar_v3.Schema$Event; extendedProperties: ExtendedProperties; session: Session }> = ({
   event,
@@ -196,6 +197,25 @@ const EventEdit: React.FC<{ event: calendar_v3.Schema$Event; extendedProperties:
                         },
                       })
                     }
+                  />
+                </Grid>
+                <Grid xs={6}></Grid>
+                <Grid xs={6}>
+                  <Autocomplete
+                    multiple
+                    id="tags-standard"
+                    options={availableTags} // TODO dynamic tags
+                    value={modifiedExtendedProperties.private.tags}
+                    onChange={(event: any, newValue: string[]) =>
+                      setModifiedExtendedProperties({
+                        ...modifiedExtendedProperties,
+                        private: {
+                          ...modifiedExtendedProperties.private,
+                          tags: newValue,
+                        },
+                      })
+                    }
+                    renderInput={params => <TextField {...params} variant="standard" label="Tags" />}
                   />
                 </Grid>
               </>

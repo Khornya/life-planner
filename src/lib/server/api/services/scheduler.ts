@@ -1,6 +1,7 @@
 import { calendar_v3 } from 'googleapis'
 import { getTaskSchedulerClient } from '../taskSchedulerClient'
 import { ExtendedProperties, parseExtendedProperties } from '../google/calendar'
+import { isEqual } from 'lodash'
 
 type SchedulerInputEvent = {
   id: string
@@ -15,6 +16,7 @@ type SchedulerInputInterval = {
   id: string
   start: number
   end: number
+  tags?: string[]
 }
 
 export type Task = {
@@ -41,7 +43,7 @@ export type Event = {
   extendedProperties?: ExtendedProperties
 }
 
-export const parseGoogleEvent: (events: calendar_v3.Schema$Event[]) => Event[] = events =>
+export const parseGoogleEvents: (events: calendar_v3.Schema$Event[]) => Event[] = events =>
   events.map(event => {
     const extendedProperties = parseExtendedProperties(event)
     return {
@@ -50,11 +52,49 @@ export const parseGoogleEvent: (events: calendar_v3.Schema$Event[]) => Event[] =
     }
   })
 
+export const combineIntervals: (intervals: SchedulerInputInterval[]) => SchedulerInputInterval[] = intervals => {
+  const taggedUnits = {}
+  for (const interval of intervals) {
+    for (let i = interval.start; i <= interval.end; i++) {
+      if (!taggedUnits[i]) {
+        taggedUnits[i] = interval.tags
+      } else {
+        taggedUnits[i] = taggedUnits[i].concat(interval.tags)
+      }
+    }
+  }
+  const sortedTaggedUnits = Object.keys(taggedUnits)
+    .map(value => parseInt(value))
+    .sort((a, b) => a - b)
+  let currentTaggedUnit = 0
+  const result: SchedulerInputInterval[] = []
+  for (let i = 1; i < sortedTaggedUnits.length; i++) {
+    if (isEqual(taggedUnits[sortedTaggedUnits[i]], taggedUnits[sortedTaggedUnits[currentTaggedUnit]])) continue
+    else {
+      result.push({
+        id: currentTaggedUnit.toString(),
+        tags: taggedUnits[sortedTaggedUnits[currentTaggedUnit]],
+        start: currentTaggedUnit,
+        end: sortedTaggedUnits[i - 1],
+      })
+      currentTaggedUnit = i
+    }
+  }
+  result.push({
+    id: currentTaggedUnit.toString(),
+    tags: taggedUnits[sortedTaggedUnits[currentTaggedUnit]],
+    start: currentTaggedUnit,
+    end: sortedTaggedUnits[sortedTaggedUnits.length - 1],
+  })
+  return result
+}
+
 export const schedule: (
   regularEvents: calendar_v3.Schema$Event[],
-  flexibleEvents: calendar_v3.Schema$Event[]
-) => Promise<ScheduleEventResult[] | null> = async (regularEvents, flexibleEvents) => {
-  const parsedRegularEvents = parseGoogleEvent(regularEvents)
+  flexibleEvents: calendar_v3.Schema$Event[],
+  reservedTags: calendar_v3.Schema$Event[]
+) => Promise<ScheduleEventResult[] | null> = async (regularEvents, flexibleEvents, reservedTags) => {
+  const parsedRegularEvents = parseGoogleEvents(regularEvents)
   const scheduleEventResults: ScheduleEventResult[] = parsedRegularEvents.map(parsedEvent => ({
     ...parsedEvent,
     scheduledEvent: null,
@@ -64,7 +104,7 @@ export const schedule: (
 
   const startTime = Math.ceil(Math.ceil(Date.now() / 1000) / 300)
 
-  const parsedFlexibleEvents = parseGoogleEvent(flexibleEvents)
+  const parsedFlexibleEvents = parseGoogleEvents(flexibleEvents)
 
   const schedulerInputEvents: SchedulerInputEvent[] = parsedFlexibleEvents.map(parsedEvent => {
     const { event, extendedProperties } = parsedEvent
@@ -78,7 +118,7 @@ export const schedule: (
     }
   })
 
-  const reservedIntervals: SchedulerInputInterval[] = parsedRegularEvents
+  const reservedEventIntervals: SchedulerInputInterval[] = parsedRegularEvents
     .map(parsedEvent => {
       const { event } = parsedEvent
       return {
@@ -89,10 +129,22 @@ export const schedule: (
     })
     .filter(event => event.end > startTime)
 
+  const reservedTagIntervals: SchedulerInputInterval[] = combineIntervals(
+    parseGoogleEvents(reservedTags).map(parsedEvent => {
+      const { event, extendedProperties } = parsedEvent
+      return {
+        id: event.id as string,
+        start: Math.ceil(Date.parse(event.start?.dateTime || `${event.start?.date}T00:00:00+02:00`) / 300 / 1000),
+        end: Math.ceil(Date.parse(event.end?.dateTime || `${event.end?.date}T00:00:00+02:00`) / 300 / 1000),
+        tags: extendedProperties?.private.tags,
+      }
+    })
+  )
+
   const scheduleResponse = await getTaskSchedulerClient().post('/', {
     events: schedulerInputEvents,
-    reservedIntervals,
-    reservedTags: [], //TODO pass reserved tags
+    reservedIntervals: reservedEventIntervals,
+    reservedTags: reservedTagIntervals,
     start: startTime,
   })
 
