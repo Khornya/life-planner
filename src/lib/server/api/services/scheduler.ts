@@ -53,13 +53,13 @@ export const parseGoogleEvents: (events: calendar_v3.Schema$Event[]) => Event[] 
   })
 
 export const combineIntervals: (intervals: SchedulerInputInterval[]) => SchedulerInputInterval[] = intervals => {
-  const taggedUnits = {}
+  const taggedUnits: { [key: number]: string[] | undefined } = {}
   for (const interval of intervals) {
     for (let i = interval.start; i <= interval.end; i++) {
       if (!taggedUnits[i]) {
         taggedUnits[i] = interval.tags
       } else {
-        taggedUnits[i] = taggedUnits[i].concat(interval.tags)
+        taggedUnits[i] = (taggedUnits[i] || []).concat(interval.tags || [])
       }
     }
   }
@@ -74,7 +74,7 @@ export const combineIntervals: (intervals: SchedulerInputInterval[]) => Schedule
       result.push({
         id: currentTaggedUnit.toString(),
         tags: taggedUnits[sortedTaggedUnits[currentTaggedUnit]],
-        start: currentTaggedUnit,
+        start: sortedTaggedUnits[currentTaggedUnit],
         end: sortedTaggedUnits[i - 1],
       })
       currentTaggedUnit = i
@@ -83,7 +83,7 @@ export const combineIntervals: (intervals: SchedulerInputInterval[]) => Schedule
   result.push({
     id: currentTaggedUnit.toString(),
     tags: taggedUnits[sortedTaggedUnits[currentTaggedUnit]],
-    start: currentTaggedUnit,
+    start: sortedTaggedUnits[currentTaggedUnit],
     end: sortedTaggedUnits[sortedTaggedUnits.length - 1],
   })
   return result
@@ -136,7 +136,7 @@ export const schedule: (
         id: event.id as string,
         start: Math.ceil(Date.parse(event.start?.dateTime || `${event.start?.date}T00:00:00+02:00`) / 300 / 1000),
         end: Math.ceil(Date.parse(event.end?.dateTime || `${event.end?.date}T00:00:00+02:00`) / 300 / 1000),
-        tags: extendedProperties?.private.tags,
+        tags: extendedProperties?.private.tags || [],
       }
     })
   )

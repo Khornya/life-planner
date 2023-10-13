@@ -83,6 +83,11 @@ const EventsPage: React.FC<{ rows: Event[] }> = ({ rows }) => {
       },
     },
     {
+      field: 'tags',
+      headerName: 'Tags',
+      width: 150,
+    },
+    {
       field: 'actions',
       type: 'actions',
       headerName: 'Actions',
@@ -115,6 +120,7 @@ const EventsPage: React.FC<{ rows: Event[] }> = ({ rows }) => {
             dueDate: row.extendedProperties?.private.dueDate,
             maxDueDate: row.extendedProperties?.private.maxDueDate,
             isFlexible: row.extendedProperties?.private.isFlexible,
+            tags: row.extendedProperties?.private.tags,
           }))}
           columns={columns}
           initialState={{

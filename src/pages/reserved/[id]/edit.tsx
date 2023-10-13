@@ -32,6 +32,7 @@ const ReservedIntervalEdit: React.FC<{ event: calendar_v3.Schema$Event; extended
     await editEvent(
       {
         ...modifiedEvent,
+        summary: modifiedExtendedProperties.private.tags.join(','),
         extendedProperties: { private: stringifiedPrivateProperties, shared: stringifiedSharedProperties },
       },
       process.env.NEXT_PUBLIC_RESERVED_CALENDAR_ID
