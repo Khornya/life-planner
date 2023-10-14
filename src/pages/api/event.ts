@@ -7,7 +7,7 @@ import { getGoogleCalendar } from '@/lib/server/api/google/calendar'
 const router = createRouter<NextApiRequest, NextApiResponse>()
 
 router.post(async (req, res) => {
-  const { id } = req.body
+  const { id, calendarId } = req.body
   const session = await getServerSession(req, res, authOptions)
 
   if (!session) {
@@ -18,7 +18,7 @@ router.post(async (req, res) => {
 
   return res.send(
     await calendar.events.update({
-      calendarId: 'primary',
+      calendarId,
       eventId: id,
       sendUpdates: 'all',
       requestBody: req.body,
@@ -28,6 +28,7 @@ router.post(async (req, res) => {
 
 router.delete(async (req, res) => {
   const ids: string[] = JSON.parse(decodeURIComponent(req.query.ids as string))
+  const { calendarId } = req.query
 
   const session = await getServerSession(req, res, authOptions)
 
@@ -37,7 +38,7 @@ router.delete(async (req, res) => {
 
   const calendar = getGoogleCalendar(session)
 
-  const deletePromises = ids.map(id => calendar.events.delete({ calendarId: 'primary', eventId: id }))
+  const deletePromises = ids.map(id => calendar.events.delete({ calendarId: (calendarId as string) || 'primary', eventId: id }))
   Promise.all(deletePromises)
 
   return res.status(200).end()

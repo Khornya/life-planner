@@ -7,7 +7,7 @@ import { authOptions } from './api/auth/[...nextauth]'
 import Box from '@mui/material/Box'
 import { DataGrid, GridActionsCellItem, GridColDef } from '@mui/x-data-grid'
 import { getGoogleCalendar } from '@/lib/server/api/google/calendar'
-import { parseGoogleEvent } from '@/lib/server/api/services/scheduler'
+import { parseGoogleEvents } from '@/lib/server/api/services/scheduler'
 import { Event } from '@/lib/server/api/services/scheduler'
 import DeleteIcon from '@mui/icons-material/Delete'
 import EditIcon from '@mui/icons-material/Edit'
@@ -83,6 +83,11 @@ const EventsPage: React.FC<{ rows: Event[] }> = ({ rows }) => {
       },
     },
     {
+      field: 'tags',
+      headerName: 'Tags',
+      width: 150,
+    },
+    {
       field: 'actions',
       type: 'actions',
       headerName: 'Actions',
@@ -115,6 +120,7 @@ const EventsPage: React.FC<{ rows: Event[] }> = ({ rows }) => {
             dueDate: row.extendedProperties?.private.dueDate,
             maxDueDate: row.extendedProperties?.private.maxDueDate,
             isFlexible: row.extendedProperties?.private.isFlexible,
+            tags: row.extendedProperties?.private.tags,
           }))}
           columns={columns}
           initialState={{
@@ -189,7 +195,7 @@ export const getServerSideProps = async (context: GetServerSidePropsContext) => 
 
   return {
     props: {
-      rows: parseGoogleEvent(flexibleEvents.data.items || []),
+      rows: parseGoogleEvents(flexibleEvents.data.items || []),
     },
   }
 }
