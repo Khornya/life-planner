@@ -52,39 +52,44 @@ export const parseGoogleEvents: (events: calendar_v3.Schema$Event[]) => Event[] 
     }
   })
 
-export const combineIntervals: (intervals: SchedulerInputInterval[]) => SchedulerInputInterval[] = intervals => {
-  const taggedUnits: { [key: number]: string[] | undefined } = {}
+const getTagsByTimeUnit = (intervals: SchedulerInputInterval[]) => {
+  const tagsByTimeUnit: { [key: number]: string[] | undefined } = {}
   for (const interval of intervals) {
     for (let i = interval.start; i <= interval.end; i++) {
-      if (!taggedUnits[i]) {
-        taggedUnits[i] = interval.tags
+      if (!tagsByTimeUnit[i]) {
+        tagsByTimeUnit[i] = interval.tags
       } else {
-        taggedUnits[i] = (taggedUnits[i] || []).concat(interval.tags || [])
+        tagsByTimeUnit[i] = (tagsByTimeUnit[i] || []).concat(interval.tags || [])
       }
     }
   }
-  const sortedTaggedUnits = Object.keys(taggedUnits)
+  return tagsByTimeUnit
+}
+
+export const combineIntervals: (intervals: SchedulerInputInterval[]) => SchedulerInputInterval[] = intervals => {
+  const tagsByTimeUnit = getTagsByTimeUnit(intervals)
+  const sortedTimeUnits = Object.keys(tagsByTimeUnit)
     .map(value => parseInt(value))
     .sort((a, b) => a - b)
-  let currentTaggedUnit = 0
+  let currentIndex = 0
   const result: SchedulerInputInterval[] = []
-  for (let i = 1; i < sortedTaggedUnits.length; i++) {
-    if (isEqual(taggedUnits[sortedTaggedUnits[i]], taggedUnits[sortedTaggedUnits[currentTaggedUnit]])) continue
+  for (let i = 1; i < sortedTimeUnits.length; i++) {
+    if (isEqual(tagsByTimeUnit[sortedTimeUnits[i]], tagsByTimeUnit[sortedTimeUnits[currentIndex]])) continue
     else {
       result.push({
-        id: currentTaggedUnit.toString(),
-        tags: taggedUnits[sortedTaggedUnits[currentTaggedUnit]],
-        start: sortedTaggedUnits[currentTaggedUnit],
-        end: sortedTaggedUnits[i - 1],
+        id: currentIndex.toString(),
+        tags: tagsByTimeUnit[sortedTimeUnits[currentIndex]],
+        start: sortedTimeUnits[currentIndex],
+        end: sortedTimeUnits[i - 1],
       })
-      currentTaggedUnit = i
+      currentIndex = i
     }
   }
   result.push({
-    id: currentTaggedUnit.toString(),
-    tags: taggedUnits[sortedTaggedUnits[currentTaggedUnit]],
-    start: sortedTaggedUnits[currentTaggedUnit],
-    end: sortedTaggedUnits[sortedTaggedUnits.length - 1],
+    id: currentIndex.toString(),
+    tags: tagsByTimeUnit[sortedTimeUnits[currentIndex]],
+    start: sortedTimeUnits[currentIndex],
+    end: sortedTimeUnits[sortedTimeUnits.length - 1],
   })
   return result
 }
