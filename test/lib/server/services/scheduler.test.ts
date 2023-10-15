@@ -27,5 +27,19 @@ describe('Scheduler service', () => {
         { id: '6', start: 16, end: 20, tags: ['Second'] },
       ])
     })
+
+    it('should not merge intervals with same tags', () => {
+      const intervals = [
+        { id: 'a', start: 10, end: 15, tags: ['First'] },
+        { id: 'b', start: 20, end: 25, tags: ['First'] },
+      ]
+
+      const result = combineIntervals(intervals)
+
+      expect(result).toEqual([
+        { id: '0', start: 10, end: 15, tags: ['First'] },
+        { id: '6', start: 20, end: 25, tags: ['First'] },
+      ])
+    })
   })
 })
