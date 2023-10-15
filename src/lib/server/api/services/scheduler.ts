@@ -21,12 +21,12 @@ type SchedulerInputInterval = {
 
 export type Task = {
   delay: number
-  duration: number
   id: string
   isLate: boolean
   isPresent: boolean
   priority: number
   start: number
+  end: number
 }
 
 type ScheduleRawResult = {
@@ -74,7 +74,11 @@ export const combineIntervals: (intervals: SchedulerInputInterval[]) => Schedule
   let currentIndex = 0
   const result: SchedulerInputInterval[] = []
   for (let i = 1; i < sortedTimeUnits.length; i++) {
-    if (isEqual(tagsByTimeUnit[sortedTimeUnits[i]], tagsByTimeUnit[sortedTimeUnits[currentIndex]])) continue
+    if (
+      sortedTimeUnits[i] === sortedTimeUnits[i - 1] + 1 &&
+      isEqual(tagsByTimeUnit[sortedTimeUnits[i]], tagsByTimeUnit[sortedTimeUnits[currentIndex]])
+    )
+      continue
     else {
       result.push({
         id: currentIndex.toString(),
@@ -109,7 +113,7 @@ export const schedule: (
 
   const startTime = Math.ceil(Math.ceil(Date.now() / 1000) / 300)
 
-  const parsedFlexibleEvents = parseGoogleEvents(flexibleEvents)
+  const parsedFlexibleEvents = parseGoogleEvents(flexibleEvents).filter(event => event.extendedProperties?.private.isFlexible)
 
   const schedulerInputEvents: SchedulerInputEvent[] = parsedFlexibleEvents.map(parsedEvent => {
     const { event, extendedProperties } = parsedEvent
@@ -165,7 +169,7 @@ export const schedule: (
         event,
         extendedProperties,
         scheduledEvent: scheduledEvent
-          ? { ...scheduledEvent, start: scheduledEvent.start * 300 * 1000, duration: scheduledEvent.duration * 300 }
+          ? { ...scheduledEvent, start: scheduledEvent.start * 300 * 1000, end: scheduledEvent.end * 300 * 1000 }
           : null,
       }
     })

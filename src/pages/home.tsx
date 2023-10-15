@@ -43,9 +43,9 @@ const Home: React.FC<{
             title: scheduledEvent.event.summary || undefined,
             start: scheduledEvent.scheduledEvent
               ? new Date((scheduledEvent.scheduledEvent as Task).start)
-              : Date.parse(scheduledEvent.event.start?.dateTime || scheduledEvent.event.start?.date || ''),
+              : new Date(scheduledEvent.event.start?.dateTime || scheduledEvent.event.start?.date || ''),
             end: scheduledEvent.scheduledEvent
-              ? new Date((scheduledEvent.scheduledEvent as Task).start + (scheduledEvent.scheduledEvent as Task).duration)
+              ? new Date((scheduledEvent.scheduledEvent as Task).end)
               : new Date(scheduledEvent.event.end?.dateTime || scheduledEvent.event.end?.date || ''),
             allDay: !!scheduledEvent.event.start?.date,
             classNames: `${scheduledEvent.extendedProperties?.private.isFlexible ? 'flexible' : ''}`,
@@ -54,7 +54,7 @@ const Home: React.FC<{
             reservedIntervals.map(reservedInterval => ({
               id: reservedInterval.event.id || undefined,
               title: reservedInterval.extendedProperties?.private.tags?.join(', ') || '',
-              start: Date.parse(reservedInterval.event.start?.dateTime || reservedInterval.event.start?.date || ''),
+              start: new Date(reservedInterval.event.start?.dateTime || reservedInterval.event.start?.date || ''),
               end: new Date(reservedInterval.event.end?.dateTime || reservedInterval.event.end?.date || ''),
               allDay: !!reservedInterval.event.start?.date,
               classNames: '',
@@ -115,18 +115,20 @@ export const getServerSideProps = async (context: GetServerSidePropsContext) => 
 
   if (reservedIntervals.data.nextPageToken) logger('warn', 'More reserved intervals available')
 
-  const scheduledEvents = await schedule(
-    regularEvents.data.items || [],
+  const scheduledEventResults = await schedule(
+    regularEvents.data.items?.filter(event => !event.transparency || event.transparency !== 'transparent') || [],
     flexibleEvents.data.items || [],
     reservedIntervals.data.items || []
   )
 
   return {
     props: {
-      scheduledEvents: scheduledEvents?.filter(
-        scheduledEvent => !scheduledEvent.scheduledEvent || scheduledEvent.scheduledEvent?.isPresent
+      scheduledEvents: scheduledEventResults?.filter(
+        scheduledEventResult => !scheduledEventResult.scheduledEvent || scheduledEventResult.scheduledEvent?.isPresent
       ),
-      unplannedEvents: scheduledEvents?.filter(scheduledEvent => scheduledEvent.scheduledEvent && !scheduledEvent.scheduledEvent.isPresent),
+      unplannedEvents: scheduledEventResults?.filter(
+        scheduledEvent => scheduledEvent.scheduledEvent && !scheduledEvent.scheduledEvent.isPresent
+      ),
       reservedIntervals: parseGoogleEvents(reservedIntervals.data.items || []),
       session: {
         user: session.user,
