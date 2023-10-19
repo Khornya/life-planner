@@ -7,7 +7,7 @@ import { getServerSession } from 'next-auth/next'
 import { authOptions } from '@/pages/api/auth/[...nextauth]'
 import { editEvent } from '@/lib/client/event'
 import { ExtendedProperties, getGoogleCalendar, parseExtendedProperties } from '@/lib/server/api/google/calendar'
-import { Autocomplete, Box, Button, Container, TextField, Typography } from '@mui/material'
+import { Autocomplete, Box, Button, Container, FormControlLabel, Switch, TextField, Typography } from '@mui/material'
 import Grid from '@mui/material/Unstable_Grid2'
 import { DateTimePicker, renderTimeViewClock } from '@mui/x-date-pickers'
 import dayjs from 'dayjs'
@@ -92,6 +92,17 @@ const ReservedIntervalEdit: React.FC<{ event: calendar_v3.Schema$Event; extended
                   })
                 }
                 renderInput={params => <TextField {...params} variant="standard" label="Tags" />}
+              />
+            </Grid>
+            <Grid xs={12}>
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={modifiedEvent.transparency === 'transparent'} //TODO helper
+                    onChange={e => setModifiedEvent({ ...modifiedEvent, transparency: e.target.checked ? 'transparent' : undefined })}
+                  />
+                }
+                label="Transparent"
               />
             </Grid>
             <Grid xs={12}>

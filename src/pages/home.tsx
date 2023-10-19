@@ -17,9 +17,10 @@ import { Event } from '@/lib/server/api/services/scheduler'
 const Home: React.FC<{
   scheduledEvents: ScheduleEventResult[] | null
   unplannedEvents: ScheduleEventResult[]
+  lateEvents: Event[]
   reservedIntervals: Event[]
   session: Session
-}> = ({ scheduledEvents, unplannedEvents, reservedIntervals, session }) => {
+}> = ({ scheduledEvents, unplannedEvents, lateEvents, reservedIntervals, session }) => {
   const router = useRouter()
 
   return (
@@ -33,6 +34,7 @@ const Home: React.FC<{
       <Link href={'/events'}>See task list</Link>
       {!scheduledEvents ? <p>/!\ No solution found !</p> : null}
       {unplannedEvents.length ? <p>Unplanned events : {unplannedEvents.map(event => event.event.summary + ' ')}</p> : null}
+      {lateEvents.length ? <p>Late events : {lateEvents.map(event => event.event.summary + ' ')}</p> : null}
       <FullCalendar
         plugins={[timeGridPlugin]}
         initialView="timeGridWeek"
@@ -116,7 +118,7 @@ export const getServerSideProps = async (context: GetServerSidePropsContext) => 
   if (reservedIntervals.data.nextPageToken) logger('warn', 'More reserved intervals available')
 
   const scheduledEventResults = await schedule(
-    regularEvents.data.items?.filter(event => !event.transparency || event.transparency !== 'transparent') || [],
+    regularEvents.data.items || [],
     flexibleEvents.data.items || [],
     reservedIntervals.data.items || []
   )
@@ -128,6 +130,10 @@ export const getServerSideProps = async (context: GetServerSidePropsContext) => 
       ),
       unplannedEvents: scheduledEventResults?.filter(
         scheduledEvent => scheduledEvent.scheduledEvent && !scheduledEvent.scheduledEvent.isPresent
+      ),
+      lateEvents: parseGoogleEvents(flexibleEvents.data.items || []).filter(
+        parsedEvent =>
+          parsedEvent.extendedProperties?.private.isFlexible && (parsedEvent.extendedProperties.private.maxDueDate || 0) <= Date.now()
       ),
       reservedIntervals: parseGoogleEvents(reservedIntervals.data.items || []),
       session: {

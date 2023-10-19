@@ -1,7 +1,8 @@
 import { calendar_v3 } from 'googleapis'
 import { getTaskSchedulerClient } from '../taskSchedulerClient'
 import { ExtendedProperties, parseExtendedProperties } from '../google/calendar'
-import { isEqual } from 'lodash'
+import { groupBy, isEqual } from 'lodash'
+import moment from 'moment'
 
 type SchedulerInputEvent = {
   id: string
@@ -16,6 +17,7 @@ type SchedulerInputInterval = {
   id: string
   start: number
   end: number
+  isTransparent?: boolean
   tags?: string[]
 }
 
@@ -66,7 +68,9 @@ const getTagsByTimeUnit = (intervals: SchedulerInputInterval[]) => {
   return tagsByTimeUnit
 }
 
-export const combineIntervals: (intervals: SchedulerInputInterval[]) => SchedulerInputInterval[] = intervals => {
+export const combineIntervalsInternal: (intervals: SchedulerInputInterval[]) => SchedulerInputInterval[] = intervals => {
+  if (!intervals.length) return []
+  const isTransparent = intervals[0].isTransparent || false
   const tagsByTimeUnit = getTagsByTimeUnit(intervals)
   const sortedTimeUnits = Object.keys(tagsByTimeUnit)
     .map(value => parseInt(value))
@@ -85,6 +89,7 @@ export const combineIntervals: (intervals: SchedulerInputInterval[]) => Schedule
         tags: tagsByTimeUnit[sortedTimeUnits[currentIndex]],
         start: sortedTimeUnits[currentIndex],
         end: sortedTimeUnits[i - 1],
+        isTransparent,
       })
       currentIndex = i
     }
@@ -94,9 +99,19 @@ export const combineIntervals: (intervals: SchedulerInputInterval[]) => Schedule
     tags: tagsByTimeUnit[sortedTimeUnits[currentIndex]],
     start: sortedTimeUnits[currentIndex],
     end: sortedTimeUnits[sortedTimeUnits.length - 1],
+    isTransparent,
   })
   return result
 }
+
+export const combineIntervals = (intervals: SchedulerInputInterval[]) => {
+  const groupedIntervals = groupBy(intervals, 'isTransparent')
+  const transparentIntervals = groupedIntervals['true'] || []
+  const opaqueIntervals = (groupedIntervals['false'] || []).concat(groupedIntervals['undefined'] || [])
+  return combineIntervalsInternal(transparentIntervals).concat(combineIntervalsInternal(opaqueIntervals))
+}
+
+const isEventEnded = (event: calendar_v3.Schema$Event) => (event.end?.date || event.end?.dateTime || '') <= moment().format('yyyy-MM-DD')
 
 export const schedule: (
   regularEvents: calendar_v3.Schema$Event[],
@@ -104,6 +119,9 @@ export const schedule: (
   reservedTags: calendar_v3.Schema$Event[]
 ) => Promise<ScheduleEventResult[] | null> = async (regularEvents, flexibleEvents, reservedTags) => {
   const parsedRegularEvents = parseGoogleEvents(regularEvents)
+  const filteredRegularEvents = parsedRegularEvents.filter(
+    parsedEvent => !isEventEnded(parsedEvent.event) && parsedEvent.event.transparency !== 'transparent'
+  )
   const scheduleEventResults: ScheduleEventResult[] = parsedRegularEvents.map(parsedEvent => ({
     ...parsedEvent,
     scheduledEvent: null,
@@ -113,7 +131,9 @@ export const schedule: (
 
   const startTime = Math.ceil(Math.ceil(Date.now() / 1000) / 300)
 
-  const parsedFlexibleEvents = parseGoogleEvents(flexibleEvents).filter(event => event.extendedProperties?.private.isFlexible)
+  const parsedFlexibleEvents = parseGoogleEvents(flexibleEvents).filter(
+    event => event.extendedProperties?.private.isFlexible && (event.extendedProperties?.private.maxDueDate || 0) > Date.now()
+  )
 
   const schedulerInputEvents: SchedulerInputEvent[] = parsedFlexibleEvents.map(parsedEvent => {
     const { event, extendedProperties } = parsedEvent
@@ -127,27 +147,31 @@ export const schedule: (
     }
   })
 
-  const reservedEventIntervals: SchedulerInputInterval[] = parsedRegularEvents
+  const reservedEventIntervals: SchedulerInputInterval[] = filteredRegularEvents
     .map(parsedEvent => {
       const { event } = parsedEvent
       return {
         id: event.id as string,
         start: Math.ceil(Date.parse(event.start?.dateTime || `${event.start?.date}T00:00:00+02:00`) / 300 / 1000),
         end: Math.ceil(Date.parse(event.end?.dateTime || `${event.end?.date}T00:00:00+02:00`) / 300 / 1000),
+        isTransparent: event.transparency === 'transparent',
       }
     })
     .filter(event => event.end > startTime)
 
   const reservedTagIntervals: SchedulerInputInterval[] = combineIntervals(
-    parseGoogleEvents(reservedTags).map(parsedEvent => {
-      const { event, extendedProperties } = parsedEvent
-      return {
-        id: event.id as string,
-        start: Math.ceil(Date.parse(event.start?.dateTime || `${event.start?.date}T00:00:00+02:00`) / 300 / 1000),
-        end: Math.ceil(Date.parse(event.end?.dateTime || `${event.end?.date}T00:00:00+02:00`) / 300 / 1000),
-        tags: extendedProperties?.private.tags || [],
-      }
-    })
+    parseGoogleEvents(reservedTags)
+      .filter(parsedEvent => !isEventEnded(parsedEvent.event))
+      .map(parsedEvent => {
+        const { event, extendedProperties } = parsedEvent
+        return {
+          id: event.id as string,
+          start: Math.ceil(Date.parse(event.start?.dateTime || `${event.start?.date}T00:00:00+02:00`) / 300 / 1000),
+          end: Math.ceil(Date.parse(event.end?.dateTime || `${event.end?.date}T00:00:00+02:00`) / 300 / 1000),
+          tags: extendedProperties?.private.tags || [],
+          isTransparent: event.transparency === 'transparent',
+        }
+      })
   )
 
   const scheduleResponse = await getTaskSchedulerClient().post('/', {
