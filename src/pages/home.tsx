@@ -115,6 +115,7 @@ export const getServerSideProps = async (context: GetServerSidePropsContext) => 
   const reservedIntervals = await calendar.events.list({
     calendarId: process.env.NEXT_PUBLIC_RESERVED_CALENDAR_ID, // TODO dynamic calendar id
     timeMin: moment().subtract(1, 'months').toISOString(),
+    timeMax: moment().add(1, 'months').toISOString(),
     singleEvents: true,
   })
 
