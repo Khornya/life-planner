@@ -64,9 +64,10 @@ const Home: React.FC<{
             }))
           )}
         eventClick={eventClick => {
-          scheduledEvents?.some(scheduledEvent => scheduledEvent.event.id === eventClick.event.id)
-            ? router.push(`/event/${eventClick.event.id}/edit`)
-            : router.push(`/reserved/${eventClick.event.id}/edit`)
+          const sourceEvent = scheduledEvents?.find(scheduledEvent => scheduledEvent.event.id === eventClick.event.id)
+          const sourceReservedTag = reservedIntervals.find(reservedInterval => reservedInterval.event.id === eventClick.event.id)
+          if (sourceEvent) return router.push(`/event/${sourceEvent.event.id}/edit`)
+          router.push(`/reserved/${sourceReservedTag?.event.recurringEventId || sourceReservedTag?.event.id}/edit`)
         }}
       />
     </div>
@@ -100,6 +101,7 @@ export const getServerSideProps = async (context: GetServerSidePropsContext) => 
   const regularEvents = await calendar.events.list({
     calendarId: 'primary',
     timeMin: moment().subtract(1, 'months').toISOString(),
+    singleEvents: true,
   })
 
   if (regularEvents.data.nextPageToken) logger('warn', 'More events available')
@@ -113,6 +115,8 @@ export const getServerSideProps = async (context: GetServerSidePropsContext) => 
   const reservedIntervals = await calendar.events.list({
     calendarId: process.env.NEXT_PUBLIC_RESERVED_CALENDAR_ID, // TODO dynamic calendar id
     timeMin: moment().subtract(1, 'months').toISOString(),
+    timeMax: moment().add(1, 'months').toISOString(),
+    singleEvents: true,
   })
 
   if (reservedIntervals.data.nextPageToken) logger('warn', 'More reserved intervals available')
