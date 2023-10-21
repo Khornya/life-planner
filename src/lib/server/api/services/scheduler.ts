@@ -111,7 +111,9 @@ export const combineIntervals = (intervals: SchedulerInputInterval[]) => {
   return combineIntervalsInternal(transparentIntervals).concat(combineIntervalsInternal(opaqueIntervals))
 }
 
-const isEventEnded = (event: calendar_v3.Schema$Event) => (event.end?.date || event.end?.dateTime || '') <= moment().format('yyyy-MM-DD')
+const isEventEnded = (event: calendar_v3.Schema$Event) =>
+  (event.end?.date && event.end?.date <= moment().format('yyyy-MM-DD')) ||
+  (event.end?.dateTime && event.end?.dateTime <= moment().toISOString())
 
 export const schedule: (
   regularEvents: calendar_v3.Schema$Event[],
