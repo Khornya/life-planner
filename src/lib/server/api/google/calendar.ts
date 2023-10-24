@@ -1,5 +1,6 @@
 import { OAuth2Client } from 'google-auth-library'
 import { calendar_v3, google } from 'googleapis'
+import moment from 'moment'
 import { Session } from 'next-auth'
 
 export interface ExtendedProperties {
@@ -53,3 +54,14 @@ export const parseExtendedProperties: (event: calendar_v3.Schema$Event) => Exten
     shared: sharedExtendedProperties,
   } as ExtendedProperties
 }
+
+export const getFlexibleEvents = async (calendar: calendar_v3.Calendar) =>
+  await calendar.events.list({
+    calendarId: 'primary',
+    timeMin: '1900-01-01T00:00:00Z',
+    timeMax: '1900-01-02T00:00:00Z',
+  })
+
+export const isEventEnded: (event: calendar_v3.Schema$Event) => boolean = (event: calendar_v3.Schema$Event) =>
+  (event.end?.date && event.end?.date <= moment().format('yyyy-MM-DD')) ||
+  ((event.end?.dateTime && event.end?.dateTime <= moment().toISOString()) as boolean)

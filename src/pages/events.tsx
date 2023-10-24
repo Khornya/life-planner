@@ -6,7 +6,7 @@ import { authOptions } from './api/auth/[...nextauth]'
 
 import Box from '@mui/material/Box'
 import { DataGrid, GridActionsCellItem, GridColDef } from '@mui/x-data-grid'
-import { getGoogleCalendar } from '@/lib/server/api/google/calendar'
+import { getFlexibleEvents, getGoogleCalendar } from '@/lib/server/api/google/calendar'
 import { parseGoogleEvents } from '@/lib/server/api/services/scheduler'
 import { Event } from '@/lib/server/api/services/scheduler'
 import DeleteIcon from '@mui/icons-material/Delete'
@@ -187,11 +187,7 @@ export const getServerSideProps = async (context: GetServerSidePropsContext) => 
 
   const calendar = getGoogleCalendar(session)
 
-  const flexibleEvents = await calendar.events.list({
-    calendarId: 'primary',
-    timeMin: '1900-01-01T00:00:00Z',
-    timeMax: '1900-01-02T00:00:00Z',
-  })
+  const flexibleEvents = await getFlexibleEvents(calendar)
 
   return {
     props: {

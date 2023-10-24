@@ -11,6 +11,7 @@ import { Autocomplete, Box, Button, Container, FormControlLabel, Switch, TextFie
 import Grid from '@mui/material/Unstable_Grid2'
 import { DateTimePicker, renderTimeViewClock } from '@mui/x-date-pickers'
 import dayjs from 'dayjs'
+import { isTransparent } from '@/lib/shared/google/calendar'
 
 export const availableTags = ['Travail', 'Indisponible', 'Ouvré']
 
@@ -98,7 +99,7 @@ const ReservedIntervalEdit: React.FC<{ event: calendar_v3.Schema$Event; extended
               <FormControlLabel
                 control={
                   <Switch
-                    checked={modifiedEvent.transparency === 'transparent'} //TODO helper
+                    checked={isTransparent(modifiedEvent)}
                     onChange={e => setModifiedEvent({ ...modifiedEvent, transparency: e.target.checked ? 'transparent' : undefined })}
                   />
                 }

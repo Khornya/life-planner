@@ -5,14 +5,39 @@ import '@/styles/home.css'
 import { useRouter } from 'next/navigation'
 import { authOptions } from './api/auth/[...nextauth]'
 import { getServerSession } from 'next-auth/next'
-import { getGoogleCalendar } from '@/lib/server/api/google/calendar'
+import { getFlexibleEvents, getGoogleCalendar } from '@/lib/server/api/google/calendar'
 import { ScheduleEventResult, Task, parseGoogleEvents, schedule } from '@/lib/server/api/services/scheduler'
 import FullCalendar from '@fullcalendar/react'
 import timeGridPlugin from '@fullcalendar/timegrid'
+import dayGridPlugin from '@fullcalendar/daygrid'
 import { logger } from '@/lib/tools/logger'
 import moment from 'moment'
 import Link from 'next/link'
 import { Event } from '@/lib/server/api/services/scheduler'
+import { EventInput } from '@fullcalendar/core'
+
+const scheduledEventToFullCalendarEvent: (scheduledEvent: ScheduleEventResult) => EventInput = scheduledEvent => ({
+  id: scheduledEvent.event.id || undefined,
+  title: scheduledEvent.event.summary || undefined,
+  start: scheduledEvent.scheduledEvent
+    ? new Date((scheduledEvent.scheduledEvent as Task).start)
+    : new Date(scheduledEvent.event.start?.dateTime || scheduledEvent.event.start?.date || ''),
+  end: scheduledEvent.scheduledEvent
+    ? new Date((scheduledEvent.scheduledEvent as Task).end)
+    : new Date(scheduledEvent.event.end?.dateTime || scheduledEvent.event.end?.date || ''),
+  allDay: !!scheduledEvent.event.start?.date,
+  classNames: `${scheduledEvent.extendedProperties?.private.isFlexible ? 'flexible' : ''}`,
+})
+
+const eventToFullCalendarEvent: (event: Event) => EventInput = event => ({
+  id: event.event.id || undefined,
+  title: event.extendedProperties?.private.tags?.join(', ') || '',
+  start: new Date(event.event.start?.dateTime || event.event.start?.date || ''),
+  end: new Date(event.event.end?.dateTime || event.event.end?.date || ''),
+  allDay: !!event.event.start?.date,
+  classNames: '',
+  color: 'orange',
+})
 
 const Home: React.FC<{
   scheduledEvents: ScheduleEventResult[] | null
@@ -36,37 +61,25 @@ const Home: React.FC<{
       {unplannedEvents.length ? <p>Unplanned events : {unplannedEvents.map(event => event.event.summary + ' ')}</p> : null}
       {lateEvents.length ? <p>Late events : {lateEvents.map(event => event.event.summary + ' ')}</p> : null}
       <FullCalendar
-        plugins={[timeGridPlugin]}
+        plugins={[timeGridPlugin, dayGridPlugin]}
         initialView="timeGridWeek"
+        headerToolbar={{
+          left: 'today prev,next',
+          center: 'title',
+          right: 'timeGridDay,timeGridWeek,dayGridMonth',
+        }}
         weekends={true}
-        events={scheduledEvents
-          ?.map(scheduledEvent => ({
-            id: scheduledEvent.event.id || undefined,
-            title: scheduledEvent.event.summary || undefined,
-            start: scheduledEvent.scheduledEvent
-              ? new Date((scheduledEvent.scheduledEvent as Task).start)
-              : new Date(scheduledEvent.event.start?.dateTime || scheduledEvent.event.start?.date || ''),
-            end: scheduledEvent.scheduledEvent
-              ? new Date((scheduledEvent.scheduledEvent as Task).end)
-              : new Date(scheduledEvent.event.end?.dateTime || scheduledEvent.event.end?.date || ''),
-            allDay: !!scheduledEvent.event.start?.date,
-            classNames: `${scheduledEvent.extendedProperties?.private.isFlexible ? 'flexible' : ''}`,
-          }))
-          .concat(
-            reservedIntervals.map(reservedInterval => ({
-              id: reservedInterval.event.id || undefined,
-              title: reservedInterval.extendedProperties?.private.tags?.join(', ') || '',
-              start: new Date(reservedInterval.event.start?.dateTime || reservedInterval.event.start?.date || ''),
-              end: new Date(reservedInterval.event.end?.dateTime || reservedInterval.event.end?.date || ''),
-              allDay: !!reservedInterval.event.start?.date,
-              classNames: '',
-              color: 'orange',
-            }))
-          )}
+        firstDay={1}
+        slotEventOverlap={false}
+        slotMinTime={'08:00:00'}
+        slotMaxTime={'22:00:00'}
+        eventMinHeight={25}
+        events={scheduledEvents?.map(scheduledEventToFullCalendarEvent).concat(reservedIntervals.map(eventToFullCalendarEvent))}
+        eventDidMount={info => (info.el.title = info.event.title)}
         eventClick={eventClick => {
           const sourceEvent = scheduledEvents?.find(scheduledEvent => scheduledEvent.event.id === eventClick.event.id)
-          const sourceReservedTag = reservedIntervals.find(reservedInterval => reservedInterval.event.id === eventClick.event.id)
           if (sourceEvent) return router.push(`/event/${sourceEvent.event.id}/edit`)
+          const sourceReservedTag = reservedIntervals.find(reservedInterval => reservedInterval.event.id === eventClick.event.id)
           router.push(`/reserved/${sourceReservedTag?.event.recurringEventId || sourceReservedTag?.event.id}/edit`)
         }}
       />
@@ -106,11 +119,7 @@ export const getServerSideProps = async (context: GetServerSidePropsContext) => 
 
   if (regularEvents.data.nextPageToken) logger('warn', 'More events available')
 
-  const flexibleEvents = await calendar.events.list({
-    calendarId: 'primary',
-    timeMin: '1900-01-01T00:00:00Z',
-    timeMax: '1900-01-02T00:00:00Z',
-  })
+  const flexibleEvents = await getFlexibleEvents(calendar)
 
   const reservedIntervals = await calendar.events.list({
     calendarId: process.env.NEXT_PUBLIC_RESERVED_CALENDAR_ID, // TODO dynamic calendar id
