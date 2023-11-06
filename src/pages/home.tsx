@@ -1,6 +1,5 @@
 import type { GetServerSidePropsContext } from 'next/types'
 import type { Session } from 'next-auth/core/types'
-import { signOut } from 'next-auth/react'
 import '@/styles/home.css'
 import { useRouter } from 'next/navigation'
 import { authOptions } from './api/auth/[...nextauth]'
@@ -12,9 +11,12 @@ import timeGridPlugin from '@fullcalendar/timegrid'
 import dayGridPlugin from '@fullcalendar/daygrid'
 import { logger } from '@/lib/tools/logger'
 import moment from 'moment'
-import Link from 'next/link'
 import { Event } from '@/lib/server/api/services/scheduler'
 import { EventInput } from '@fullcalendar/core'
+import { Main } from '@/components/Main/Main'
+import { Box, Modal, Button } from '@mui/material'
+import { useState } from 'react'
+import { modalStyle } from '@/components/modal/modal'
 
 const scheduledEventToFullCalendarEvent: (scheduledEvent: ScheduleEventResult) => EventInput = scheduledEvent => ({
   id: scheduledEvent.event.id || undefined,
@@ -47,19 +49,10 @@ const Home: React.FC<{
   session: Session
 }> = ({ scheduledEvents, unplannedEvents, lateEvents, reservedIntervals, session }) => {
   const router = useRouter()
+  const [modalOpen, setModalOpen] = useState(!scheduledEvents || !!unplannedEvents.length || !!lateEvents.length)
 
   return (
-    <div>
-      <div>
-        <h2>hi {session.user?.name}</h2>
-        <img src={session.user?.image || ''} alt={`${session.user?.name} photo`} />
-        <button onClick={() => signOut()}>sign out</button>
-      </div>
-      <h1>My events</h1>
-      <Link href={'/events'}>See task list</Link>
-      {!scheduledEvents ? <p>/!\ No solution found !</p> : null}
-      {unplannedEvents.length ? <p>Unplanned events : {unplannedEvents.map(event => event.event.summary + ' ')}</p> : null}
-      {lateEvents.length ? <p>Late events : {lateEvents.map(event => event.event.summary + ' ')}</p> : null}
+    <Main>
       <FullCalendar
         plugins={[timeGridPlugin, dayGridPlugin]}
         initialView="timeGridWeek"
@@ -74,16 +67,29 @@ const Home: React.FC<{
         slotMinTime={'08:00:00'}
         slotMaxTime={'22:00:00'}
         eventMinHeight={25}
-        events={scheduledEvents?.map(scheduledEventToFullCalendarEvent).concat(reservedIntervals.map(eventToFullCalendarEvent))}
+        events={scheduledEvents?.map(scheduledEventToFullCalendarEvent)}
         eventDidMount={info => (info.el.title = info.event.title)}
         eventClick={eventClick => {
           const sourceEvent = scheduledEvents?.find(scheduledEvent => scheduledEvent.event.id === eventClick.event.id)
-          if (sourceEvent) return router.push(`/event/${sourceEvent.event.id}/edit`)
-          const sourceReservedTag = reservedIntervals.find(reservedInterval => reservedInterval.event.id === eventClick.event.id)
-          router.push(`/reserved/${sourceReservedTag?.event.recurringEventId || sourceReservedTag?.event.id}/edit`)
+          if (sourceEvent) router.push(`/event/${sourceEvent.event.id}/edit`)
         }}
       />
-    </div>
+      <Modal open={modalOpen} onClose={() => setModalOpen(false)}>
+        <Box sx={modalStyle}>
+          {!scheduledEvents ? <p>/!\ No solution found !</p> : null}
+          {unplannedEvents.length ? <p>Unplanned events : {unplannedEvents.map(event => event.event.summary + ' ')}</p> : null}
+          {lateEvents.length ? <p>Late events : {lateEvents.map(event => event.event.summary + ' ')}</p> : null}
+          <Box className="modal-buttons">
+            <Button variant="contained" color="warning" onClick={() => router.push('/events')}>
+              Reschedule
+            </Button>
+            <Button variant="contained" color="success" onClick={() => setModalOpen(false)}>
+              Nevermind
+            </Button>
+          </Box>
+        </Box>
+      </Modal>
+    </Main>
   )
 }
 

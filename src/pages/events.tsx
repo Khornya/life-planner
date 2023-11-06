@@ -17,6 +17,7 @@ import { deleteEvents } from '@/lib/client/event'
 import { useState } from 'react'
 import { Button, Modal, Typography } from '@mui/material'
 import { modalStyle } from '@/components/modal/modal'
+import { Main } from '@/components/Main/Main'
 
 const EventsPage: React.FC<{ rows: Event[] }> = ({ rows }) => {
   const router = useRouter()
@@ -109,32 +110,33 @@ const EventsPage: React.FC<{ rows: Event[] }> = ({ rows }) => {
   ]
 
   return (
-    <>
-      <Box sx={{ height: 400, width: '100%' }}>
-        <DataGrid
-          rows={rows.map(row => ({
-            id: row.event.id,
-            title: row.event.summary,
-            duration: row.extendedProperties?.private.duration,
-            impact: row.extendedProperties?.private.impact,
-            dueDate: row.extendedProperties?.private.dueDate,
-            maxDueDate: row.extendedProperties?.private.maxDueDate,
-            isFlexible: row.extendedProperties?.private.isFlexible,
-            tags: row.extendedProperties?.private.tags,
-          }))}
-          columns={columns}
-          initialState={{
-            pagination: {
-              paginationModel: {
-                pageSize: 5,
-              },
+    <Main>
+      <Typography variant="h3" gutterBottom>
+        Tasks
+      </Typography>
+      <DataGrid
+        rows={rows.map(row => ({
+          id: row.event.id,
+          title: row.event.summary,
+          duration: row.extendedProperties?.private.duration,
+          impact: row.extendedProperties?.private.impact,
+          dueDate: row.extendedProperties?.private.dueDate,
+          maxDueDate: row.extendedProperties?.private.maxDueDate,
+          isFlexible: row.extendedProperties?.private.isFlexible,
+          tags: row.extendedProperties?.private.tags,
+        }))}
+        columns={columns}
+        initialState={{
+          pagination: {
+            paginationModel: {
+              pageSize: 10,
             },
-          }}
-          pageSizeOptions={[5]}
-          checkboxSelection
-          disableRowSelectionOnClick
-        />
-      </Box>
+          },
+        }}
+        pageSizeOptions={[10]}
+        checkboxSelection
+        disableRowSelectionOnClick
+      />
       <Modal
         open={isDeleteModalOpen}
         onClose={handleCloseDeleteModal}
@@ -159,7 +161,7 @@ const EventsPage: React.FC<{ rows: Event[] }> = ({ rows }) => {
           <Button onClick={handleCloseDeleteModal}>Cancel</Button>
         </Box>
       </Modal>
-    </>
+    </Main>
   )
 }
 

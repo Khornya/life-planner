@@ -5,3 +5,8 @@
     border-color: red;
   }
 }
+
+.modal-buttons {
+  display: flex;
+  justify-content: space-evenly;
+}
