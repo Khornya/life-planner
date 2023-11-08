@@ -1,8 +1,9 @@
 import { calendar_v3 } from 'googleapis'
 import { getTaskSchedulerClient } from '../taskSchedulerClient'
-import { ExtendedProperties, parseExtendedProperties } from '../google/calendar'
+import { ExtendedProperties, isEventEnded, parseExtendedProperties } from '../google/calendar'
 import { groupBy, isEqual } from 'lodash'
 import moment from 'moment'
+import { isTransparent } from '@/lib/shared/google/calendar'
 
 type SchedulerInputEvent = {
   id: string
@@ -45,6 +46,10 @@ export type Event = {
   extendedProperties?: ExtendedProperties
 }
 
+const unixTimeTo5minIntervals = (datetime: number) => Math.ceil(datetime / 300000)
+
+const minIntervalsToUnixTime = (units: number) => units * 300000
+
 export const parseGoogleEvents: (events: calendar_v3.Schema$Event[]) => Event[] = events =>
   events.map(event => {
     const extendedProperties = parseExtendedProperties(event)
@@ -75,29 +80,34 @@ export const combineIntervalsInternal: (intervals: SchedulerInputInterval[]) => 
   const sortedTimeUnits = Object.keys(tagsByTimeUnit)
     .map(value => parseInt(value))
     .sort((a, b) => a - b)
-  let currentIndex = 0
+  let currentIntervalStartIndex = 0
+  let currentIntervalStart = sortedTimeUnits[currentIntervalStartIndex]
+  let currentIntervalTags = tagsByTimeUnit[sortedTimeUnits[currentIntervalStartIndex]]
   const result: SchedulerInputInterval[] = []
-  for (let i = 1; i < sortedTimeUnits.length; i++) {
+  for (let currentTimeUnitIndex = 1; currentTimeUnitIndex < sortedTimeUnits.length; currentTimeUnitIndex++) {
+    const currentTimeUnit = sortedTimeUnits[currentTimeUnitIndex]
     if (
-      sortedTimeUnits[i] === sortedTimeUnits[i - 1] + 1 &&
-      isEqual(tagsByTimeUnit[sortedTimeUnits[i]], tagsByTimeUnit[sortedTimeUnits[currentIndex]])
+      currentTimeUnit === sortedTimeUnits[currentTimeUnitIndex - 1] + 1 && // time units are consecutive
+      isEqual(tagsByTimeUnit[currentTimeUnit], tagsByTimeUnit[currentIntervalStart]) // tags are equal
     )
       continue
     else {
       result.push({
-        id: currentIndex.toString(),
-        tags: tagsByTimeUnit[sortedTimeUnits[currentIndex]],
-        start: sortedTimeUnits[currentIndex],
-        end: sortedTimeUnits[i - 1],
+        id: currentIntervalStartIndex.toString(),
+        tags: currentIntervalTags,
+        start: sortedTimeUnits[currentIntervalStartIndex],
+        end: sortedTimeUnits[currentTimeUnitIndex - 1],
         isTransparent,
       })
-      currentIndex = i
+      currentIntervalStartIndex = currentTimeUnitIndex
+      currentIntervalStart = sortedTimeUnits[currentIntervalStartIndex]
+      currentIntervalTags = tagsByTimeUnit[currentIntervalStart]
     }
   }
   result.push({
-    id: currentIndex.toString(),
-    tags: tagsByTimeUnit[sortedTimeUnits[currentIndex]],
-    start: sortedTimeUnits[currentIndex],
+    id: currentIntervalStartIndex.toString(),
+    tags: currentIntervalTags,
+    start: currentIntervalStart,
     end: sortedTimeUnits[sortedTimeUnits.length - 1],
     isTransparent,
   })
@@ -111,10 +121,6 @@ export const combineIntervals = (intervals: SchedulerInputInterval[]) => {
   return combineIntervalsInternal(transparentIntervals).concat(combineIntervalsInternal(opaqueIntervals))
 }
 
-const isEventEnded = (event: calendar_v3.Schema$Event) =>
-  (event.end?.date && event.end?.date <= moment().format('yyyy-MM-DD')) ||
-  (event.end?.dateTime && event.end?.dateTime <= moment().toISOString())
-
 export const schedule: (
   regularEvents: calendar_v3.Schema$Event[],
   flexibleEvents: calendar_v3.Schema$Event[],
@@ -124,14 +130,14 @@ export const schedule: (
   const filteredRegularEvents = parsedRegularEvents.filter(
     parsedEvent => !isEventEnded(parsedEvent.event) && parsedEvent.event.transparency !== 'transparent'
   )
-  const scheduleEventResults: ScheduleEventResult[] = parsedRegularEvents.map(parsedEvent => ({
+  const regularScheduleEventResults: ScheduleEventResult[] = parsedRegularEvents.map(parsedEvent => ({
     ...parsedEvent,
     scheduledEvent: null,
   }))
 
-  if (!flexibleEvents.length) return scheduleEventResults
+  if (!flexibleEvents.length) return regularScheduleEventResults
 
-  const startTime = Math.ceil(Math.ceil(Date.now() / 1000) / 300)
+  const startTime = unixTimeTo5minIntervals(Date.now())
 
   const parsedFlexibleEvents = parseGoogleEvents(flexibleEvents).filter(
     event => event.extendedProperties?.private.isFlexible && (event.extendedProperties?.private.maxDueDate || 0) > Date.now()
@@ -143,8 +149,8 @@ export const schedule: (
       id: event.id as string,
       impact: extendedProperties?.private.impact || 0,
       duration: extendedProperties?.private.duration || 1,
-      dueDate: Math.ceil((extendedProperties?.private.dueDate || 0) / 300 / 1000),
-      maxDueDate: Math.ceil((extendedProperties?.private.maxDueDate || 0) / 300 / 1000),
+      dueDate: unixTimeTo5minIntervals(extendedProperties?.private.dueDate || 0),
+      maxDueDate: unixTimeTo5minIntervals(extendedProperties?.private.maxDueDate || 0),
       tags: extendedProperties?.private.tags || [],
     }
   })
@@ -154,9 +160,9 @@ export const schedule: (
       const { event } = parsedEvent
       return {
         id: event.id as string,
-        start: Math.ceil(Date.parse(event.start?.dateTime || `${event.start?.date}T00:00:00+02:00`) / 300 / 1000),
-        end: Math.ceil(Date.parse(event.end?.dateTime || `${event.end?.date}T00:00:00+02:00`) / 300 / 1000),
-        isTransparent: event.transparency === 'transparent',
+        start: unixTimeTo5minIntervals(Date.parse(event.start?.dateTime || moment(event.start?.date).toISOString())),
+        end: unixTimeTo5minIntervals(Date.parse(event.end?.dateTime || moment(event.end?.date).toISOString())),
+        isTransparent: isTransparent(event),
       }
     })
     .filter(event => event.end > startTime)
@@ -168,10 +174,10 @@ export const schedule: (
         const { event, extendedProperties } = parsedEvent
         return {
           id: event.id as string,
-          start: Math.ceil(Date.parse(event.start?.dateTime || `${event.start?.date}T00:00:00+02:00`) / 300 / 1000),
-          end: Math.ceil(Date.parse(event.end?.dateTime || `${event.end?.date}T00:00:00+02:00`) / 300 / 1000),
+          start: unixTimeTo5minIntervals(Date.parse(event.start?.dateTime || moment(event.start?.date).toISOString())),
+          end: unixTimeTo5minIntervals(Date.parse(event.end?.dateTime || moment(event.end?.date).toISOString())),
           tags: extendedProperties?.private.tags || [],
-          isTransparent: event.transparency === 'transparent',
+          isTransparent: isTransparent(event),
         }
       })
   )
@@ -185,19 +191,19 @@ export const schedule: (
 
   const scheduleResult: ScheduleRawResult = scheduleResponse.data
 
-  if (!scheduleResult.found) return scheduleEventResults
+  if (!scheduleResult.found) return regularScheduleEventResults
 
-  return scheduleEventResults.concat(
-    parsedFlexibleEvents.map(parsedFlexibleEvent => {
-      const { event, extendedProperties } = parsedFlexibleEvent
-      const scheduledEvent: Task = scheduleResult.tasks[event.id as any]
-      return {
-        event,
-        extendedProperties,
-        scheduledEvent: scheduledEvent
-          ? { ...scheduledEvent, start: scheduledEvent.start * 300 * 1000, end: scheduledEvent.end * 300 * 1000 }
-          : null,
-      }
-    })
-  )
+  const scheduledEvents = parsedFlexibleEvents.map(parsedFlexibleEvent => {
+    const { event, extendedProperties } = parsedFlexibleEvent
+    const scheduledEvent: Task = scheduleResult.tasks[event.id as any]
+    return {
+      event,
+      extendedProperties,
+      scheduledEvent: scheduledEvent
+        ? { ...scheduledEvent, start: minIntervalsToUnixTime(scheduledEvent.start), end: minIntervalsToUnixTime(scheduledEvent.end) }
+        : null,
+    }
+  })
+
+  return regularScheduleEventResults.concat(scheduledEvents)
 }

@@ -6,7 +6,7 @@ import { authOptions } from './api/auth/[...nextauth]'
 
 import Box from '@mui/material/Box'
 import { DataGrid, GridActionsCellItem, GridColDef } from '@mui/x-data-grid'
-import { getGoogleCalendar } from '@/lib/server/api/google/calendar'
+import { getFlexibleEvents, getGoogleCalendar } from '@/lib/server/api/google/calendar'
 import { parseGoogleEvents } from '@/lib/server/api/services/scheduler'
 import { Event } from '@/lib/server/api/services/scheduler'
 import DeleteIcon from '@mui/icons-material/Delete'
@@ -17,6 +17,7 @@ import { deleteEvents } from '@/lib/client/event'
 import { useState } from 'react'
 import { Button, Modal, Typography } from '@mui/material'
 import { modalStyle } from '@/components/modal/modal'
+import { Main } from '@/components/Main/Main'
 
 const EventsPage: React.FC<{ rows: Event[] }> = ({ rows }) => {
   const router = useRouter()
@@ -109,32 +110,33 @@ const EventsPage: React.FC<{ rows: Event[] }> = ({ rows }) => {
   ]
 
   return (
-    <>
-      <Box sx={{ height: 400, width: '100%' }}>
-        <DataGrid
-          rows={rows.map(row => ({
-            id: row.event.id,
-            title: row.event.summary,
-            duration: row.extendedProperties?.private.duration,
-            impact: row.extendedProperties?.private.impact,
-            dueDate: row.extendedProperties?.private.dueDate,
-            maxDueDate: row.extendedProperties?.private.maxDueDate,
-            isFlexible: row.extendedProperties?.private.isFlexible,
-            tags: row.extendedProperties?.private.tags,
-          }))}
-          columns={columns}
-          initialState={{
-            pagination: {
-              paginationModel: {
-                pageSize: 5,
-              },
+    <Main>
+      <Typography variant="h3" gutterBottom>
+        Tasks
+      </Typography>
+      <DataGrid
+        rows={rows.map(row => ({
+          id: row.event.id,
+          title: row.event.summary,
+          duration: row.extendedProperties?.private.duration,
+          impact: row.extendedProperties?.private.impact,
+          dueDate: row.extendedProperties?.private.dueDate,
+          maxDueDate: row.extendedProperties?.private.maxDueDate,
+          isFlexible: row.extendedProperties?.private.isFlexible,
+          tags: row.extendedProperties?.private.tags,
+        }))}
+        columns={columns}
+        initialState={{
+          pagination: {
+            paginationModel: {
+              pageSize: 10,
             },
-          }}
-          pageSizeOptions={[5]}
-          checkboxSelection
-          disableRowSelectionOnClick
-        />
-      </Box>
+          },
+        }}
+        pageSizeOptions={[10]}
+        checkboxSelection
+        disableRowSelectionOnClick
+      />
       <Modal
         open={isDeleteModalOpen}
         onClose={handleCloseDeleteModal}
@@ -159,7 +161,7 @@ const EventsPage: React.FC<{ rows: Event[] }> = ({ rows }) => {
           <Button onClick={handleCloseDeleteModal}>Cancel</Button>
         </Box>
       </Modal>
-    </>
+    </Main>
   )
 }
 
@@ -187,11 +189,7 @@ export const getServerSideProps = async (context: GetServerSidePropsContext) => 
 
   const calendar = getGoogleCalendar(session)
 
-  const flexibleEvents = await calendar.events.list({
-    calendarId: 'primary',
-    timeMin: '1900-01-01T00:00:00Z',
-    timeMax: '1900-01-02T00:00:00Z',
-  })
+  const flexibleEvents = await getFlexibleEvents(calendar)
 
   return {
     props: {
